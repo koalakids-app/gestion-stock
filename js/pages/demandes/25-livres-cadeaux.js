@@ -14,6 +14,7 @@ let lcDonnees=null;
 let lcFins={},lcFinsErreur=false;
 let lcAVenir={};
 let lcChoix={};
+let lcDevis=[];
 const lcEuro=n=>(Math.round(n*100)/100).toLocaleString('fr-FR',{minimumFractionDigits:2,maximumFractionDigits:2})+' €';
 const lcPrix=k=>{const p=lcChoix[k]&&lcChoix[k].prix;return p==null||p===''?0:Number(p)||0;};
 // Choix du livre par tranche (sql/livres_cadeaux_choix.sql) ; sans la table, les prix restent vides.
@@ -109,6 +110,7 @@ function lcInit(){
   lcRender();
   lcChargerFins();
   lcChargerChoix();
+  lcChargerDevis();
 }
 // Mois complets entre la naissance et la date de référence (négatif = pas encore né).
 function lcAgeMois(dob,ref){
@@ -173,7 +175,7 @@ function lcRender(){
     ${g[t.k].length?g[t.k].map(x=>`<div style="font-size:13px;padding:3px 0;border-top:1px solid #F1EFF7;display:flex;justify-content:space-between;gap:8px"><span>${lcEsc(lcPrenomInitiale(x.e))}${(lcAVenir[x.e.id]||x.e.date_entree||'')>lcDonnees.ref?' <span style="font-size:11px;color:var(--muted)">(entrée le '+lcEsc(lcDateFr(lcAVenir[x.e.id]||x.e.date_entree))+')</span>':''}</span><span style="color:var(--muted)">${lcAgeTexte(x.m)}</span></div>`).join(''):'<div style="font-size:12px;color:var(--muted)">Aucun enfant</div>'}
   </div>`;
   const budget=LC_TRANCHES.reduce((a,t)=>a+g[t.k].length*lcPrix(t.k),0);
-  z.innerHTML=lcChoixHtml()+(lcFinsErreur?'<div style="margin-bottom:10px;max-width:1000px;background:#FDE8E8;border-radius:10px;padding:10px 14px;font-size:13px;color:#8A1C1C"><b>Fins de contrat non chargées</b> : les enfants dont le contrat est terminé ne sont pas écartés. Rechargez la page ; si le message revient, vérifiez les droits de lecture sur les contrats.</div>':'')+`<div style="font-weight:700;color:var(--koala);margin-bottom:10px">${total} livre${total>1?'s':''} à prévoir${budget?' · budget '+lcEuro(budget):''} · âges au ${lcDateFr(lcDonnees.ref)}</div>
+  z.innerHTML=lcChoixHtml()+lcDevisHtml()+(lcFinsErreur?'<div style="margin-bottom:10px;max-width:1000px;background:#FDE8E8;border-radius:10px;padding:10px 14px;font-size:13px;color:#8A1C1C"><b>Fins de contrat non chargées</b> : les enfants dont le contrat est terminé ne sont pas écartés. Rechargez la page ; si le message revient, vérifiez les droits de lecture sur les contrats.</div>':'')+`<div style="font-weight:700;color:var(--koala);margin-bottom:10px">${total} livre${total>1?'s':''} à prévoir${budget?' · budget '+lcEuro(budget):''} · âges au ${lcDateFr(lcDonnees.ref)}</div>
     <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px;max-width:1000px">${LC_TRANCHES.map(carte).join('')}</div>`
     +(g.sans.length?`<div style="margin-top:14px;max-width:1000px;background:#FFF3DC;border-radius:10px;padding:10px 14px;font-size:13px;color:#6B4300">
       <b>À vérifier (${g.sans.length})</b> : date de naissance manquante ou postérieure à la date choisie, enfant non compté.<br>${g.sans.map(x=>lcEsc(lcPrenomInitiale(x.e))).join(', ')}</div>`:'');
@@ -293,4 +295,102 @@ function lcBudget(toutes){
   const base=location.href.replace(/[^/]*([?#].*)?$/,'');
   w.document.write(lcBudgetHtml(pages,{ref,synthese:toutes&&isDirection?lcRecap():null},base).replace('</body>','<script>window.onload=function(){window.print();}<\/script></body>'));
   w.document.close();
+}
+
+/* Devis du libraire : pièces jointes par crèche (sql/livres_cadeaux_devis.sql, bucket privé livres-devis). */
+async function lcChargerDevis(){
+  try{
+    const r=await sb.from('livres_cadeaux_devis').select('id,creche_id,fichier_path,fichier_nom,montant,created_at').order('created_at');
+    if(r.error)throw r.error;
+    lcDevis=r.data||[];
+  }catch(err){console.warn('lcChargerDevis',err);lcDevis=[];}
+  lcRender();
+}
+function lcDevisMontant(creche){
+  const l=lcDevis.filter(d=>String(d.creche_id)===String(creche)&&d.montant!=null);
+  return l.length?l.reduce((a,d)=>a+Number(d.montant),0):null;
+}
+function lcDevisHtml(){
+  const creche=lcCrecheId(),ed=!!isDirection;
+  const l=lcDevis.filter(d=>String(d.creche_id)===String(creche));
+  const lignes=l.map(d=>`<div style="display:flex;gap:10px;align-items:center;padding:4px 0;border-top:1px solid #F1EFF7;font-size:13px">
+      <a href="#" onclick="lcDevisOuvrir('${d.id}');return false" style="flex:1;color:var(--koala);word-break:break-all"><i class="ti ti-paperclip"></i> ${lcEsc(d.fichier_nom)}</a>
+      <span style="color:var(--muted)">${d.montant!=null?lcEuro(Number(d.montant)):'montant non saisi'}</span>
+      ${ed?`<button class="btn-sm" onclick="lcDevisSupprimer('${d.id}')" title="Supprimer"><i class="ti ti-trash"></i></button>`:''}</div>`).join('');
+  const dv=lcDevisMontant(creche);
+  return`<div style="max-width:1000px;margin:0 0 16px;background:#fff;border:1.5px solid #E6E3F3;border-radius:12px;padding:10px 14px">
+    <div style="font-weight:700;color:var(--koala);margin-bottom:4px"><i class="ti ti-file-invoice"></i> Devis du libraire — ${lcEsc((cacheCreches.find(c=>String(c.id)===String(creche))||{}).name||'')}</div>
+    ${lignes||'<div style="font-size:12px;color:var(--muted)">Aucun devis joint pour cette crèche.</div>'}
+    ${dv!==null?`<div style="font-size:12px;margin-top:6px">Total des devis : <b>${lcEuro(dv)}</b></div>`:''}
+    ${ed?`<div style="margin-top:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap"><label class="btn-sm" style="cursor:pointer"><i class="ti ti-upload"></i> Joindre un devis<input type="file" accept=".pdf,image/*,.doc,.docx,.xls,.xlsx" style="display:none" onchange="lcDevisAjouter(this)"></label>
+      <label style="font-size:12px;color:var(--muted)">Montant du devis <input id="lc-devis-montant" class="finput" inputmode="decimal" placeholder="facultatif" style="width:90px;font-size:12px;padding:4px 8px"> €</label></div>`:''}
+  </div>`;
+}
+async function lcDevisAjouter(input){
+  const f=input.files&&input.files[0];input.value='';
+  const creche=lcCrecheId();
+  if(!f||!creche)return;
+  if(f.size>10*1024*1024){showBanner('Fichier trop lourd (10 Mo maximum).','error');return;}
+  const m=String(document.getElementById('lc-devis-montant')?.value||'').trim().replace(',','.');
+  const montant=m===''?null:parseFloat(m);
+  const nom=f.name.replace(/[^\w.\- ]+/g,'_');
+  const chemin=creche+'/'+Date.now()+'-'+nom.replace(/\s+/g,'_');
+  const up=await sb.storage.from('livres-devis').upload(chemin,f,{contentType:f.type||undefined});
+  if(up.error){showBanner('Envoi impossible (script SQL livres_cadeaux_devis appliqué ?).','error');return;}
+  const r=await sb.from('livres_cadeaux_devis').insert({creche_id:creche,fichier_path:chemin,fichier_nom:f.name,montant:isNaN(montant)?null:montant});
+  if(r.error){await sb.storage.from('livres-devis').remove([chemin]);showBanner('Enregistrement impossible.','error');return;}
+  showBanner('Devis joint ✅');
+  lcChargerDevis();
+}
+async function lcDevisOuvrir(id){
+  const d=lcDevis.find(x=>x.id===id);if(!d)return;
+  const w=window.open('','_blank');
+  const r=await sb.storage.from('livres-devis').createSignedUrl(d.fichier_path,600);
+  if(r.error||!r.data){if(w)w.close();showBanner('Ouverture impossible.','error');return;}
+  if(w)w.location=r.data.signedUrl;else location.href=r.data.signedUrl;
+}
+async function lcDevisSupprimer(id){
+  const d=lcDevis.find(x=>x.id===id);if(!d)return;
+  if(!confirm('Supprimer le devis « '+d.fichier_nom+' » ?'))return;
+  const r=await sb.from('livres_cadeaux_devis').delete().eq('id',id);
+  if(r.error){showBanner('Suppression impossible.','error');return;}
+  await sb.storage.from('livres-devis').remove([d.fichier_path]);
+  lcChargerDevis();
+}
+
+/* Export Excel du budget : synthèse (direction, toutes crèches) + une feuille par crèche. */
+function lcExcel(toutes){
+  if(typeof XLSX==='undefined'){showBanner('Bibliothèque Excel non chargée.','error');return;}
+  const ref=document.getElementById('lc-date').value||lcDateParDefaut();
+  const creches=toutes&&isDirection?cacheCreches:cacheCreches.filter(c=>String(c.id)===String(lcCrecheId()));
+  const wb=XLSX.utils.book_new();
+  const nomFeuille=(n,i)=>String(n||'Crèche').replace(/[\\\/?*\[\]:]/g,' ').slice(0,28)+(i?' '+i:'');
+  const synth=[['Livres cadeaux — budget','','','','','Âges au '+lcDateFr(ref)],[],['Crèche'].concat(LC_TRANCHES.map(t=>t.lib),['Nombre total','Budget (€)','Devis joint (€)','Écart devis − budget (€)'])];
+  const feuilles=[];
+  creches.forEach(c=>{
+    const d=lcCalculer(c.id),n=LC_TRANCHES.map(t=>d.g[t.k].length),budget=n.reduce((a,x,i)=>a+x*lcPrix(LC_TRANCHES[i].k),0),dv=lcDevisMontant(c.id);
+    synth.push([c.name].concat(n,[n.reduce((a,b)=>a+b,0),budget,dv===null?'':dv,dv===null?'':Math.round((dv-budget)*100)/100]));
+    const rows=[['Livres cadeaux — '+c.name],['Âges au '+lcDateFr(ref)],[],['Tranche d’âge','Livre choisi','Prix unitaire (€)','Nombre','Montant (€)']];
+    LC_TRANCHES.forEach((t,i)=>rows.push([t.lib,(lcChoix[t.k]||{}).titre||'Livre non choisi',lcChoix[t.k]&&lcChoix[t.k].prix!=null?Number(lcChoix[t.k].prix):'',n[i],Math.round(n[i]*lcPrix(t.k)*100)/100]));
+    rows.push(['Total','','',n.reduce((a,b)=>a+b,0),Math.round(budget*100)/100]);
+    const dl=lcDevis.filter(x=>String(x.creche_id)===String(c.id));
+    if(dl.length){rows.push([],['Devis du libraire','','','','Montant (€)']);dl.forEach(x=>rows.push([x.fichier_nom,'','','',x.montant==null?'':Number(x.montant)]));
+      if(dv!==null)rows.push(['Total des devis','','','',dv],['Écart devis − budget','','','',Math.round((dv-budget)*100)/100]);}
+    if(d.g.sans.length)rows.push([],['Non comptés (date de naissance manquante) : '+d.g.sans.map(x=>lcPrenomInitiale(x.e)).join(', ')]);
+    feuilles.push([nomFeuille(c.name),rows,[{wch:22},{wch:34},{wch:16},{wch:10},{wch:14}]]);
+  });
+  if(toutes&&isDirection){
+    const tot=['Toutes les crèches'];
+    for(let j=1;j<synth[2].length;j++){tot.push(synth.slice(3).reduce((a,r)=>a+(Number(r[j])||0),0));}
+    synth.push(tot);
+    const ws=XLSX.utils.aoa_to_sheet(synth);ws['!cols']=[{wch:26}].concat(Array(8).fill({wch:16}));
+    XLSX.utils.book_append_sheet(wb,ws,'Synthèse');
+  }
+  const vus={};
+  feuilles.forEach(([nom,rows,cols])=>{
+    vus[nom]=(vus[nom]||0)+1;
+    const ws=XLSX.utils.aoa_to_sheet(rows);ws['!cols']=cols;
+    XLSX.utils.book_append_sheet(wb,ws,vus[nom]>1?nom.slice(0,27)+' '+vus[nom]:nom);
+  });
+  XLSX.writeFile(wb,'livres-cadeaux-budget-'+ref+'.xlsx');
 }
