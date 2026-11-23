@@ -135,9 +135,27 @@ async function renderPresenceHebdo(){
     if(p.heure_fin&&(!o.hf||p.heure_fin>o.hf))o.hf=p.heure_fin;
   });
   const ctHebdo={};
+  /* Contrat terminé : l'enfant a des contrats, aucun ne couvre le jour, et le dernier s'est
+     achevé avant. Sans cela la prévision (historique des 4 semaines) ou une ligne de présence
+     générée avant la fin du contrat le laissait dans les effectifs après son départ. */
+  const ctTout={},ctFinMax={},ctCouvre={};
+  function contratTermine(enfantId,i){
+    const k=String(enfantId);
+    if(!ctTout[k]||ctCouvre[k+'_'+i]||!ctFinMax[k]||ctFinMax[k]>=dateStrs[i])return false;
+    /* Un ajout manuel fait après la fin du contrat (dépannage) reste compté. */
+    const lignes=presData.filter(function(p){return p.enfant_id===enfantId&&p.presence_date===dateStrs[i];});
+    return !lignes.some(function(p){return p.created_at&&String(p.created_at).slice(0,10)>ctFinMax[k];});
+  }
   try{
     const{data:ctData}=await sb.from('enfants_contrats').select('*').in('enfant_id',allEnfants.map(e=>e.id));
     (ctData||[]).forEach(function(c){
+      const k=String(c.enfant_id);
+      ctTout[k]=true;
+      if(c.date_fin&&(!ctFinMax[k]||c.date_fin>ctFinMax[k]))ctFinMax[k]=c.date_fin;
+      if(!c.date_fin)ctFinMax[k]='9999-12-31';
+      dateStrs.forEach(function(ds,i){
+        if((!c.date_debut||c.date_debut<=ds)&&(!c.date_fin||c.date_fin>=ds))ctCouvre[k+'_'+i]=true;
+      });
       const jours=ctParseJours(c.jours);
       dateStrs.forEach(function(ds,i){
         if(c.date_debut&&c.date_debut>ds)return;
@@ -175,6 +193,7 @@ async function renderPresenceHebdo(){
   allEnfants.forEach(function(e){
     const repas=enfRepasCode(e);
     const cells=days5.map(function(d,i){
+      if(contratTermine(e.id,i))return{present:false,slot:null,horaires:'',repas:''};
       if(prevision){
         /* Un contrat qui couvre la semaine prime sur l'historique : un changement de
            contrat (nouveaux jours) ne se lit pas encore dans les 4 semaines précédentes. */
