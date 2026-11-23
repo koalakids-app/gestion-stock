@@ -232,7 +232,7 @@ function showPage(page, btn) {
   if (page === 'commandes') { renderCommandes(); }
   if (page === 'fournisseurs') { renderFournisseurs(); }
   if (page === 'historique') { renderHistorique(); }
-  if (page === 'couches') { renderCouches(); }
+  if (page === 'couches') { renderCouches(); coucheChargerRecap(); }
   if (page === 'nettoyages') { renderNettoyages(); }
   if (page === 'inventaire') {
     switchInvTab(currentInvTab); // réaffiche le bon tableau

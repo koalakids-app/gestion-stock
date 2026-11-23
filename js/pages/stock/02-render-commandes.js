@@ -565,6 +565,7 @@ function renderCouches() {
   if (!box) return;
   renderCouchesValorisation();
   renderCouchesCommande();
+  renderCouchesRecap();
   const crechesAffichees = couchesCrechesVisibles();
   const alertes = [];
   let html = '';

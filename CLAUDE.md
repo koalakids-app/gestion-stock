@@ -71,6 +71,8 @@ chargés tels quels par les pages (ex. `demandes.html` charge `js/pages/demandes
 ## Module Stock
 - Les référents lisent l'inventaire, les commandes et l'historique de **toutes** les crèches de l'organisation (lecture seule) ; l'écriture reste limitée à leur crèche. Policies SELECT `*_lecture_organisation` dans `sql/stock_lecture_organisation_referents.sql` (appliquées). Le stock de couches d'une référente reste limité à sa crèche.
 
+- Consommation de couches par mois et par enfant (Stock › Couches, `js/pages/stock/11-recap-couches.js`, `coucheChargerRecap` / `renderCouchesRecap`, export CSV) : lit la RPC `kk_couches_recap_mensuel` (`sql/stock_couches_recap_mensuel.sql`, à appliquer à la main) qui agrège `couches_jour` sur 12 mois ; droits = `kk_couches_ordi_autorise` (direction toutes crèches, référent·e la sienne).
+
 ## Album photos
 - Tuile « Album photos » (Demandes › Enfants & suivi, `main-album`, `js/pages/demandes/20-album-photos.js`, préfixe `alb`) : photos de la crèche classées par enfant, **tri manuel** (sélection de plusieurs photos puis clic sur l'enfant ; tri par visage en option, voir plus bas). Direction = toutes les crèches, référent·e = la leur.
 - `sql/album_photos.sql` (à appliquer à la main, une partie à la fois) : tables `album_photos`, `album_photos_enfants` (une photo de groupe = une seule ligne stockée, un lien par enfant), `album_journal` (ajout, classement, retrait, suppression, remise ; sans UPDATE, lecture direction) et bucket privé `album` (chemin `<creche_id>/<photo_id>.jpg` + `_mini.jpg`, filtré par `kk_acces_album`). Photos réduites dans le navigateur (1600 px, miniature 360 px).
