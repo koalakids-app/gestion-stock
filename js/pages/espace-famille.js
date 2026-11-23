@@ -141,6 +141,79 @@ function carteDocuments(d){
     +'<div id="docStatut"></div></div>';
 }
 
+
+/* ------------------------------------------------------------------ soutiens proposés par l'équipe
+   Support pédagogique choisi par l'équipe pour CET enfant, avec un mot personnel (edge function
+   `espace-famille`, sql/famille_soutiens.sql). La famille l'ouvre et répond « utile / bof / j'aimerais
+   en parler » : l'auteur·e est prévenu·e. L'origine de la proposition reste interne. */
+const TYPE_SOUTIEN={video:['player-play','Vidéo','Voir la vidéo'],pdf:['file-text','Fiche PDF','Ouvrir la fiche'],document:['file-text','Document','Ouvrir le document'],image:['photo','Image','Voir l\'image'],lien:['link','Article en ligne','Lire l\'article']};
+const RETOURS_SOUTIEN=[['utile','👍 Utile'],['bof','🤔 Bof'],['en_parler','💬 J\'aimerais en parler']];
+
+function ligneSoutien(x,detail){
+  const t=TYPE_SOUTIEN[x.type]||TYPE_SOUTIEN.lien;
+  return '<div class="soutien'+(detail?'':' sout-liste')+'" style="padding:12px 0;border-top:1px solid var(--line)">'
+    +'<div style="display:flex;gap:10px"><div style="flex:0 0 42px;height:42px;border-radius:11px;background:var(--violet-bg);color:var(--violet);display:flex;align-items:center;justify-content:center;font-size:21px"><i class="ti ti-'+t[0]+'"></i></div>'
+    +'<div style="min-width:0"><b>'+esc(x.titre)+'</b>'+(x.ouvert?'':' <span class="nouveau">Nouveau</span>')
+    +'<div style="font-size:12.5px;color:var(--muted)">'+esc(t[1])+(x.theme?' · '+esc(x.theme):'')+(x.auteur?' · de '+esc(x.auteur):'')+' · '+esc(fmtDate(x.date))+'</div></div></div>'
+    +'<div style="background:var(--violet-bg);border-radius:12px;padding:10px 12px;font-size:14px;margin:10px 0;white-space:pre-wrap">«&nbsp;'+esc(x.mot)+'&nbsp;»</div>'
+    +'<button class="btn" data-sout="'+esc(x.id)+'"><i class="ti ti-external-link"></i> '+esc(t[2])+'</button>'
+    +'<div style="margin-top:12px;font-size:13px;font-weight:700">Cela vous a-t-il aidé ?</div>'
+    +'<div style="display:flex;gap:8px;margin-top:6px;flex-wrap:wrap">'
+    +RETOURS_SOUTIEN.map(r=>'<button class="btn btn-g" style="flex:1;justify-content:center;font-size:13px;padding:8px 6px'+(x.retour===r[0]?';background:var(--green-bg);color:var(--green);outline:2px solid var(--green)':'')+'" data-ret="'+esc(x.id)+'|'+r[0]+'">'+r[1]+'</button>').join('')+'</div>'
+    +'<div style="font-size:12px;color:var(--muted);margin-top:6px">'+(x.retour?'Merci, votre réponse a été transmise à l\'équipe.':'Votre réponse est transmise à l\'équipe.')+'</div></div>';
+}
+
+function carteSoutienAccueil(d){
+  const l=d.soutiens||[];
+  if(!l.length)return '';
+  const x=l.find(y=>!y.ouvert)||l[0];
+  const t=TYPE_SOUTIEN[x.type]||TYPE_SOUTIEN.lien;
+  return '<div class="card'+(x.ouvert?'':' une')+'"><h2><i class="ti ti-bulb"></i> Proposé par l\'équipe pour '+esc(d.enfant.prenom||'votre enfant')+(x.ouvert?'':' <span class="nouveau">Nouveau</span>')+'</h2>'
+    +'<b>'+esc(x.titre)+'</b><div style="font-size:12.5px;color:var(--muted)">'+esc(t[1])+(x.theme?' · '+esc(x.theme):'')+'</div>'
+    +'<p class="une-p" style="margin:8px 0">«&nbsp;'+esc(extrait(x.mot,160))+'&nbsp;»</p>'
+    +'<button class="btn" data-aller="soutiens">Découvrir</button>'
+    +(l.length>1?' <button class="btn btn-g" data-aller="soutiens">Tout voir ('+l.length+')</button>':'')+'</div>';
+}
+
+function vueSoutiens(d){
+  const l=d.soutiens||[];
+  return '<div class="card"><button class="lien" style="background:none;border:0;padding:0;font:inherit;font-weight:700;color:var(--violet);cursor:pointer;margin-bottom:8px" data-aller="accueil"><i class="ti ti-arrow-left"></i> Retour</button>'
+    +'<h2><i class="ti ti-bulb"></i> Pour '+esc(d.enfant.prenom||'votre enfant')+'</h2>'
+    +'<p class="vide" style="margin-top:0">Des ressources choisies par l\'équipe de la crèche, rien que pour vous.</p>'
+    +(l.length?l.map(x=>ligneSoutien(x,true)).join(''):'<p class="vide" style="margin:0">Aucune proposition pour le moment.</p>')
+    +'<div id="soutStatut"></div></div>';
+}
+
+async function ouvrirSoutien(id,btn){
+  const st=document.getElementById('soutStatut');
+  const w=window.open('','_blank');
+  btn.disabled=true;
+  try{
+    const r=await appel('soutien_ouvrir',{id});
+    if(w)w.location.href=r.url;else location.href=r.url;
+    const x=(DONNEES.soutiens||[]).find(y=>y.id===id);
+    if(x&&!x.ouvert){x.ouvert=true;}
+    if(st){st.className='';st.textContent='';}
+  }catch(e){
+    if(w)w.close();
+    if(st){st.className='err';st.textContent='Ce contenu n\'a pas pu être ouvert. Réessayez dans un instant.';}
+  }finally{btn.disabled=false;}
+}
+
+async function retourSoutien(id,retour,btn){
+  const st=document.getElementById('soutStatut');
+  btn.disabled=true;
+  try{
+    await appel('soutien_retour',{id,retour});
+    const x=(DONNEES.soutiens||[]).find(y=>y.id===id);
+    if(x)x.retour=retour;
+    rendre();
+  }catch(e){
+    btn.disabled=false;
+    if(st){st.className='err';st.textContent='Votre réponse n\'a pas pu être envoyée. Réessayez dans un instant.';}
+  }
+}
+
 function carteFermetures(d){
   const f=d.fermetures||[];
   return '<div class="card"><h2><i class="ti ti-calendar-off"></i> Fermetures de la crèche</h2>'
@@ -424,10 +497,11 @@ function vueAccueil(d){
   const tuiles='<div class="tuiles">'
     +'<button class="tuile" data-aller="docs"><i class="ti ti-files"></i><b>Documents</b><small>'+(nbDocs?nbDocs+' à consulter':'Envoyer un document')+'</small></button>'
     +(d.creche_id?'<a class="tuile" href="menu.html?c='+encodeURIComponent(d.creche_id)+'" target="_blank" rel="noopener"><i class="ti ti-tools-kitchen-2"></i><b>Menu</b><small>de la semaine</small></a>':'')
+    +((d.soutiens||[]).length?'<button class="tuile" data-aller="soutiens"><i class="ti ti-bulb"></i><b>Pour '+esc(d.enfant.prenom||'l\'enfant')+'</b><small>'+d.soutiens.length+' proposition'+(d.soutiens.length>1?'s':'')+'</small></button>':'')
     +'<button class="tuile" data-aller="creche"><i class="ti ti-address-book"></i><b>Contacts</b><small>et fermetures</small></button>'
     +(d.suivi_token?'<a class="tuile" href="famille-suivi.html?t='+encodeURIComponent(d.suivi_token)+'"><i class="ti ti-heart-handshake"></i><b>Suivi</b><small>de '+esc(d.enfant.prenom||'l\'enfant')+'</small></a>':'')
     +'</div>';
-  return carteAccordVisage(d)+une+cartePointage(d)+prochaine+tuiles+carteAppareil();
+  return carteAccordVisage(d)+carteSoutienAccueil(d)+une+cartePointage(d)+prochaine+tuiles+carteAppareil();
 }
 
 function vueInfos(d){
@@ -464,10 +538,10 @@ function rendre(){
   const d=DONNEES;
   const nonLus=d.messages.filter(m=>m.nouveau).length;
   const barre='<nav class="onglets" role="tablist">'+ONGLETS.map(o=>
-    '<button role="tab" class="onglet'+(o[0]===ONGLET?' actif':'')+'" aria-selected="'+(o[0]===ONGLET)+'" data-aller="'+o[0]+'">'
+    '<button role="tab" class="onglet'+(o[0]===(ONGLET==='soutiens'?'accueil':ONGLET)?' actif':'')+'" aria-selected="'+(o[0]===(ONGLET==='soutiens'?'accueil':ONGLET))+'" data-aller="'+o[0]+'">'
     +'<i class="ti ti-'+o[1]+'"></i><span>'+o[2]+'</span>'
     +(o[0]==='infos'&&nonLus?'<em class="pastille">'+nonLus+'</em>':'')+'</button>').join('')+'</nav>';
-  const vues={accueil:vueAccueil,infos:vueInfos,docs:vueDocs,creche:vueCreche};
+  const vues={accueil:vueAccueil,infos:vueInfos,docs:vueDocs,creche:vueCreche,soutiens:vueSoutiens};
   wrap.innerHTML=barre+'<div class="vue">'+(vues[ONGLET]||vueAccueil)(d)+'</div>';
   wrap.querySelectorAll('[data-aller]').forEach(b=>b.addEventListener('click',()=>allerA(b.dataset.aller,b.dataset.msg)));
   liaisonsAppareil();
@@ -475,6 +549,8 @@ function rendre(){
   const envoi=document.getElementById('btnEnvoi');
   if(envoi)envoi.addEventListener('click',envoyer);
   wrap.querySelectorAll('[data-doc]').forEach(b=>b.addEventListener('click',()=>ouvrirDocument(b.dataset.doc,b)));
+  wrap.querySelectorAll('[data-sout]').forEach(b=>b.addEventListener('click',()=>ouvrirSoutien(b.dataset.sout,b)));
+  wrap.querySelectorAll('[data-ret]').forEach(b=>b.addEventListener('click',()=>{const[i,r]=b.dataset.ret.split('|');retourSoutien(i,r,b);}));
 }
 
 function lireBase64(blob){

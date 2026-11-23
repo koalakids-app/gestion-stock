@@ -16,6 +16,11 @@
 //   {action:'accord_visage', decision:'autorise'|'refuse', nom, autorite:true, version}
 //                     -> signature en ligne de l'accord « tri par visage » de l'album photos (voir
 //                        sql/album_accord_en_ligne.sql). `get` renvoie aussi {accord_visage:{...}}.
+//   {action:'soutiens'} -> inclus dans `get` : soutiens = propositions de l'équipe pour CET enfant
+//                        (support pédagogique + mot personnel ; l'origine reste interne).
+//   {action:'soutien_ouvrir', id} -> {url, type, titre} (fichier : lien signé de 2 min ; lien : adresse directe)
+//   {action:'soutien_retour', id, retour:'utile'|'bof'|'en_parler'} -> prévient l'auteur·e (push)
+//                        Voir sql/famille_soutiens.sql.
 //   {action:'push_abonner', endpoint, p256dh, auth} / {action:'push_desabonner', endpoint}
 //                     -> abonnement aux notifications de CET accès (table famille_push)
 //
@@ -72,6 +77,35 @@ async function documentsDeLEnfant(sb: any, enfantId: string) {
   const { data } = await sb.from("famille_documents")
     .select("id, type, titre, path, publie_le").in("source_id", sources).order("publie_le", { ascending: false });
   return data || [];
+}
+
+
+const BUCKET_SUPPORTS = "supports-pedagogiques";
+const RETOURS = ["utile", "bof", "en_parler"];
+
+/** Soutiens proposés par l'équipe à CET enfant. Renvoie seulement ce que la famille doit voir :
+ *  jamais l'origine (demande / observation), ni les chemins de fichiers. */
+async function soutiensDeLEnfant(sb: any, enfantId: string) {
+  const { data: lignes, error } = await sb.from("famille_soutiens")
+    .select("id, support_id, mot, auteur_nom, created_at, ouvert_le, retour")
+    .eq("enfant_id", enfantId).order("created_at", { ascending: false }).limit(50);
+  if (error) { console.error("[espace-famille] soutiens", error); return []; }
+  if (!lignes?.length) return [];
+  const { data: supports } = await sb.from("supports_pedagogiques")
+    .select("id, titre, type, theme_id, famille").in("id", lignes.map((l: any) => l.support_id));
+  const { data: themes } = await sb.from("supports_themes")
+    .select("id, nom, icone").in("id", [...new Set((supports || []).map((x: any) => x.theme_id))]);
+  const sup = new Map((supports || []).map((x: any) => [x.id, x]));
+  const th = new Map((themes || []).map((x: any) => [x.id, x]));
+  return lignes.filter((l: any) => sup.get(l.support_id)?.famille).map((l: any) => {
+    const x: any = sup.get(l.support_id);
+    const t: any = th.get(x.theme_id);
+    return {
+      id: l.id, titre: x.titre, type: x.type, theme: t?.nom || "", theme_icone: t?.icone || "💡",
+      mot: l.mot, auteur: l.auteur_nom || "", date: l.created_at,
+      ouvert: !!l.ouvert_le, retour: l.retour || null,
+    };
+  });
 }
 
 /** Fermetures à venir : celles de la crèche + celles communes au réseau, sans doublon. */
@@ -225,9 +259,11 @@ Deno.serve(async (req) => {
     const contacts = await contactsDeLaCreche(sb, acces.creche_id);
 
     const accord_visage = await accordVisage(sb, acces);
+    const soutiens = await soutiensDeLEnfant(sb, acces.enfant_id);
 
     return json({
       documents,
+      soutiens,
       fermetures,
       accord_visage,
       contacts,
@@ -339,6 +375,66 @@ Deno.serve(async (req) => {
       nom: enfant?.prenom || "Un enfant",
     });
     return json({ ok: true, accord_visage: await accordVisage(sb, acces) });
+  }
+
+  if (action === "soutien_ouvrir") {
+    const id = String(body.id || "");
+    if (!UUID.test(id)) return erreur("introuvable", 404);
+    const { data: l } = await sb.from("famille_soutiens")
+      .select("id, support_id, ouvert_le").eq("id", id).eq("enfant_id", acces.enfant_id).maybeSingle();
+    if (!l) return erreur("introuvable", 404);
+    const { data: x } = await sb.from("supports_pedagogiques")
+      .select("titre, type, url, fichier_path, apercu_path, fichier_nom, famille").eq("id", l.support_id).maybeSingle();
+    if (!x || !x.famille) return erreur("introuvable", 404);
+    let url = x.url as string | null;
+    if (!url) {
+      // PDF ou aperçu PDF d'un Word / PowerPoint : lecture directe ; sinon fichier à télécharger.
+      const chemin = x.apercu_path || x.fichier_path;
+      if (!chemin) return erreur("indisponible", 404);
+      const { data: signe, error: sErr } = await sb.storage.from(BUCKET_SUPPORTS).createSignedUrl(chemin, 120);
+      if (sErr || !signe?.signedUrl) { console.error("[espace-famille] url soutien", sErr); return erreur("erreur_lecture", 500); }
+      url = signe.signedUrl;
+    } else if (!/^https:\/\//i.test(url)) {
+      return erreur("indisponible", 404);
+    }
+    if (!l.ouvert_le) await sb.from("famille_soutiens").update({ ouvert_le: new Date().toISOString() }).eq("id", l.id);
+    return json({ url, type: x.type, titre: x.titre });
+  }
+
+  if (action === "soutien_retour") {
+    const id = String(body.id || "");
+    const retour = String(body.retour || "");
+    if (!UUID.test(id) || !RETOURS.includes(retour)) return erreur("retour_invalide");
+    const { data: l } = await sb.from("famille_soutiens")
+      .select("id, auteur_id, support_id").eq("id", id).eq("enfant_id", acces.enfant_id).maybeSingle();
+    if (!l) return erreur("introuvable", 404);
+    // Au plus 30 retours par heure et par accès (évite les envois en rafale).
+    const { count: recents } = await sb.from("famille_soutiens")
+      .select("id", { count: "exact", head: true }).eq("enfant_id", acces.enfant_id)
+      .gte("retour_le", new Date(Date.now() - 3600000).toISOString());
+    if ((recents ?? 0) >= 30) return erreur("trop_de_retours", 429);
+    const { error: uErr } = await sb.from("famille_soutiens")
+      .update({ retour, retour_le: new Date().toISOString() }).eq("id", l.id);
+    if (uErr) { console.error("[espace-famille] retour soutien", uErr); return erreur("enregistrement_impossible", 500); }
+    // Prévient la personne qui a fait la proposition (jamais bloquant ; silence réseau géré par notify-push).
+    try {
+      if (l.auteur_id) {
+        const { data: x } = await sb.from("supports_pedagogiques").select("titre").eq("id", l.support_id).maybeSingle();
+        const txt = retour === "utile" ? "l'a trouvé utile" : retour === "bof" ? "n'a pas été convaincue" : "aimerait en parler";
+        await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/notify-push`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json",
+            Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+            apikey: Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")! },
+          body: JSON.stringify({
+            referent_ids: [l.auteur_id], title: "Retour d'une famille",
+            body: `${enfant?.prenom || "Une famille"} : « ${x?.titre || "soutien"} » — la famille ${txt}.`,
+            url: "./demandes.html", tag: `soutien-${l.id}`,
+          }),
+        });
+      }
+    } catch (e) { console.error("[espace-famille] push retour", e); }
+    return json({ ok: true, retour });
   }
 
   if (action === "push_abonner") {

@@ -16,7 +16,7 @@ const SP_ICONES={video:'▶',pdf:'📄',document:'📝',image:'🖼️',lien:'�
 const SP_COULEURS=['#ffe3d6','#e0efff','#ffe0ee','#e3f6e8','#eadfff','#fff3c9','#ffe9cf','#dff5f0'];
 const SP_DEGRADES=['linear-gradient(135deg,#ffb199,#ff7e5f)','linear-gradient(135deg,#ffd6e8,#d6f0ff)','linear-gradient(135deg,#ffdc73,#e3532e)','linear-gradient(135deg,#bfe3ff,#e8d9ff)','linear-gradient(135deg,#c9f0d6,#9fd8e8)','linear-gradient(135deg,#e8e0ff,#ffd3c2)'];
 
-let SP={themes:[],supports:[],vus:{},direction:false,user:null};
+let SP={themes:[],supports:[],vus:{},direction:false,gestion:false,moi:null,user:null,enfantCible:null};
 let spTheme='',spType='Tous',spQ='';
 
 function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
@@ -117,7 +117,7 @@ function spDessiner(){
     const t=spThemeDe(s);
     return '<div class="c" data-id="'+esc(s.id)+'" tabindex="0">'+spVignette(s,i)+
       '<div class="b"><h4>'+esc(s.titre)+'</h4>'+(s.description?'<p>'+esc(s.description)+'</p>':'')+
-      '<div class="m"><span class="tag">'+esc(t.icone)+' '+esc(t.nom)+'</span>'+(s.a_voir?'<span class="tag">🎓 À voir</span>':'')+(SP.vus[s.id]?'<span class="vu">✓ Vu</span>':'')+'</div></div></div>';
+      '<div class="m"><span class="tag">'+esc(t.icone)+' '+esc(t.nom)+'</span>'+(s.a_voir?'<span class="tag">🎓 À voir</span>':'')+(s.famille?'<span class="tag">👪 Familles</span>':'')+(SP.vus[s.id]?'<span class="vu">✓ Vu</span>':'')+'</div></div></div>';
   }).join('')||'<p class="vide">Aucun support ne correspond.</p>';
   $('grille').querySelectorAll('.c').forEach(e=>{
     e.onclick=()=>spOuvrir(e.dataset.id);
@@ -293,11 +293,13 @@ async function spOuvrir(id){
     '<button class="vu-btn'+(vu?' on':'')+'" id="f-vu">'+(vu?'✓ Marqué comme vu':'Marquer comme vu')+'</button>'+
     '<div><label for="f-notes">Mes notes (visibles par moi seul·e)</label><textarea class="notes" id="f-notes" placeholder="Ce que j\'en retiens…">'+esc((SP.vus[id]||{}).notes||'')+'</textarea></div>'+
     '<div class="msg" id="f-msg"></div>'+
+    (SP.gestion&&s.famille?'<div class="rangee"><button class="btn" id="f-prop">👪 Proposer à des familles</button></div>':'')+
     (SP.direction?'<div class="rangee"><button class="btn btn-sec" id="f-edit">Modifier</button><button class="btn btn-sec" id="f-prio">'+(s.a_voir?'Retirer du parcours':'Ajouter au parcours')+'</button></div>':'')+'</div>';
   $('modal').classList.add('on');
   if(liseuse)spOuvrirLiseuse(s,liseuse,$('f-lect'));
   $('f-x').onclick=spFermer;
   $('f-vu').onclick=()=>spMarquerVu(id,!SP.vus[id]);
+  if($('f-prop'))$('f-prop').onclick=()=>spProposer(id);
   $('f-notes').onblur=()=>spEnregistrerNotes(id);
   if(SP.direction){
     $('f-edit').onclick=()=>spSupportForm(id);
@@ -382,6 +384,102 @@ function spThemeForm(id){
   }
 }
 
+
+/* ---------- Proposer un soutien à des familles (équipe : direction, coordination, référent·e) ----------
+   Une ligne `famille_soutiens` par enfant (sql/famille_soutiens.sql) ; la famille la lit dans l'Espace
+   famille. Le mot est obligatoire ; l'origine reste interne. Seuls les supports « proposables aux
+   familles » (colonne `famille`, cochée par la direction) peuvent être envoyés. */
+const SP_ORIGINES=[['demande','Une demande de la famille'],['observation','Une observation de l\'équipe'],['echange','Un échange avec le parent']];
+
+async function spBandeauEnfant(){
+  try{
+    const {data}=await sb.from('enfants').select('prenom,nom').eq('id',SP.enfantCible).maybeSingle();
+    if(!data)return;
+    $('wrap').insertAdjacentHTML('afterbegin','<div style="background:#fff6ee;border:1px solid #fbd3b0;border-radius:12px;padding:10px 14px;margin-bottom:12px;font-size:14px">👪 Vous cherchez un soutien pour <b>'+esc((data.prenom||'')+' '+(data.nom||''))+'</b> : ouvrez un support marqué « 👪 Familles », puis <b>Proposer à des familles</b>.</div>');
+  }catch(e){console.warn('[supports] bandeau enfant',e);}
+}
+
+async function spProposer(id){
+  const s=SP.supports.find(x=>x.id===id);if(!s||!s.famille)return;
+  let creches=[];
+  try{
+    const r=await sb.from('creches').select('id,name').order('name');
+    creches=(r.data||[]).filter(c=>SP.direction||c.id===SP.moi.creche_id);
+  }catch(e){console.warn('[supports] crèches',e);}
+  if(!creches.length){alert('Aucune crèche disponible.');return;}
+  let cible=null;
+  if(SP.enfantCible){
+    const r=await sb.from('enfants').select('id,creche_id').eq('id',SP.enfantCible).maybeSingle();
+    cible=r.data||null;
+  }
+  const crecheDef=(cible&&creches.some(c=>c.id===cible.creche_id))?cible.creche_id:(SP.moi.creche_id&&creches.some(c=>c.id===SP.moi.creche_id)?SP.moi.creche_id:creches[0].id);
+  spModaleSimple('<div class="ligne"><h3>Proposer un soutien à des familles</h3><button class="x" id="p-x" aria-label="Fermer">✕</button></div>'+
+    '<div style="background:#fff6ee;border:1px solid #fbd3b0;border-radius:10px;padding:8px 10px;font-size:13.5px">'+esc(spThemeDe(s).icone)+' <b>'+esc(s.titre)+'</b> — '+esc(SP_TYPES[s.type]||'')+'</div>'+
+    '<div><label for="p-cr">Crèche</label><select class="champ" id="p-cr"'+(creches.length===1?' disabled':'')+'>'+creches.map(c=>'<option value="'+esc(c.id)+'"'+(c.id===crecheDef?' selected':'')+'>'+esc(c.name||'')+'</option>').join('')+'</select></div>'+
+    '<div><label>Enfant(s)</label><input class="champ" id="p-q" placeholder="Rechercher un prénom…" style="margin-bottom:6px"><div id="p-enf" style="max-height:190px;overflow:auto;border:1px solid #e3e1ef;border-radius:10px;padding:6px 10px;font-size:14px">Chargement…</div></div>'+
+    '<div><label>À l\'origine de la proposition <small style="font-weight:400;color:#888">(interne : la famille ne le voit pas)</small></label>'+
+    SP_ORIGINES.map((o,i)=>'<label class="check" style="margin:3px 0"><input type="radio" name="p-or" value="'+o[0]+'"'+(i===1?' checked':'')+'> '+esc(o[1])+'</label>').join('')+'</div>'+
+    '<div><label for="p-mot">Mot pour les parents (obligatoire)</label><textarea class="champ" id="p-mot" rows="4" maxlength="1500" placeholder="Bonjour, nous avons pensé à cette ressource pour… N\'hésitez pas à nous en parler."></textarea>'+
+    '<div style="font-size:12px;color:#888;margin-top:3px">Lu par les parents : écrivez-le comme un message, sans détail interne ni nom d\'un autre enfant.</div></div>'+
+    '<label class="check"><input type="checkbox" id="p-push" checked> Prévenir les parents (notification)</label>'+
+    '<div class="msg" id="p-msg"></div>'+
+    '<div class="rangee"><button class="btn" id="p-ok">Envoyer</button></div>');
+  $('p-x').onclick=spFermer;
+  let enfants=[],acces=new Set(),deja=new Set();
+  const choisis=new Set(cible?[cible.id]:[]);
+  const dessiner=()=>{
+    const q=$('p-q').value.trim().toLowerCase();
+    const L=enfants.filter(e=>!q||((e.prenom||'')+' '+(e.nom||'')).toLowerCase().includes(q));
+    $('p-enf').innerHTML=L.map(e=>{
+      const ok=acces.has(e.id)&&!deja.has(e.id);
+      const note=deja.has(e.id)?' <small style="color:#888">· déjà proposé</small>':!acces.has(e.id)?' <small style="color:#c0392b">· pas d\'accès Espace famille</small>':'';
+      return '<label class="check" style="margin:3px 0;'+(ok?'':'opacity:.55')+'"><input type="checkbox" data-e="'+esc(e.id)+'"'+(ok?'':' disabled')+(choisis.has(e.id)&&ok?' checked':'')+'> '+esc((e.prenom||'')+' '+(e.nom||''))+note+'</label>';
+    }).join('')||'<span style="color:#888">Aucun enfant.</span>';
+    $('p-enf').querySelectorAll('input[data-e]').forEach(c=>c.onchange=()=>{c.checked?choisis.add(c.dataset.e):choisis.delete(c.dataset.e);});
+  };
+  const charger=async()=>{
+    const cr=$('p-cr').value;
+    $('p-enf').textContent='Chargement…';
+    const [e,a,d]=await Promise.all([
+      sb.from('enfants').select('id,prenom,nom,archive_le').eq('creche_id',cr).is('archive_le',null).order('prenom'),
+      sb.from('famille_acces').select('enfant_id').eq('creche_id',cr).eq('actif',true),
+      sb.from('famille_soutiens').select('enfant_id').eq('creche_id',cr).eq('support_id',id)
+    ]);
+    enfants=e.data||[];acces=new Set((a.data||[]).map(x=>x.enfant_id));deja=new Set((d.data||[]).map(x=>x.enfant_id));
+    [...choisis].forEach(i=>{if(!enfants.some(x=>x.id===i))choisis.delete(i);});
+    dessiner();
+  };
+  $('p-cr').onchange=()=>{choisis.clear();charger();};
+  $('p-q').oninput=dessiner;
+  try{await charger();}catch(e){console.error('[supports]',e);$('p-enf').textContent='Impossible de charger les enfants.';}
+  $('p-ok').onclick=async()=>{
+    const msg=$('p-msg'),mot=$('p-mot').value.trim(),cr=$('p-cr').value;
+    msg.className='msg';
+    if(!choisis.size){msg.textContent='Choisissez au moins un enfant.';msg.className='msg ko';return;}
+    if(!mot){msg.textContent='Le mot pour les parents est obligatoire.';msg.className='msg ko';return;}
+    $('p-ok').disabled=true;msg.textContent='Envoi…';
+    try{
+      const origine=(document.querySelector('input[name="p-or"]:checked')||{}).value||'observation';
+      const rows=[...choisis].map(eid=>({creche_id:cr,enfant_id:eid,support_id:id,origine,mot,auteur_id:SP.moi.id,auteur_nom:SP.moi.name||''}));
+      const r=await sb.from('famille_soutiens').insert(rows);
+      if(r.error)throw r.error;
+      let info='Proposition envoyée à '+rows.length+' famille'+(rows.length>1?'s':'')+'.';
+      if($('p-push').checked){
+        try{
+          const {data:ac}=await sb.from('famille_acces').select('id').eq('creche_id',cr).eq('actif',true).in('enfant_id',[...choisis]);
+          const ids=(ac||[]).map(x=>x.id);
+          if(ids.length){
+            const {error}=await sb.functions.invoke('notify-push',{body:{acces_ids:ids,title:'Une proposition de la crèche pour votre enfant',body:s.titre,url:'./espace-famille.html',tag:'famille-soutien'}});
+            if(error)throw error;
+          }
+        }catch(e){console.warn('[supports] push',e);info+=' (notification non envoyée)';}
+      }
+      msg.textContent=info;msg.className='msg';
+      setTimeout(spFermer,1400);
+    }catch(e){console.error('[supports]',e);msg.textContent='Erreur : '+(e.message||e);msg.className='msg ko';$('p-ok').disabled=false;}
+  };
+}
+
 /* ---------- Direction : supports ---------- */
 function spSupportForm(id){
   const s=id?SP.supports.find(x=>x.id===id):null;
@@ -394,6 +492,8 @@ function spSupportForm(id){
     '<div><label for="s-file">…ou un fichier (PDF, Word, PowerPoint, image, 50 Mo max)'+(s&&s.fichier_nom?' — actuel : '+esc(s.fichier_nom):'')+'</label><input class="champ" id="s-file" type="file"></div>'+
     '<div><label for="s-apercu">Aperçu PDF d\'un Word / PowerPoint (facultatif : mise en page fidèle dans le lecteur)'+(s&&s.apercu_path?' — un aperçu existe déjà':'')+'</label><input class="champ" id="s-apercu" type="file" accept="application/pdf,.pdf"></div>'+
     '<label class="check"><input type="checkbox" id="s-prio"'+(s&&s.a_voir?' checked':'')+'> À voir en priorité (parcours de formation)</label>'+
+    '<label class="check"><input type="checkbox" id="s-fam"'+(s&&s.famille?' checked':'')+'> Proposable aux familles (👪 l\'équipe pourra l\'envoyer à une famille)</label>'+
+    '<div style="font-size:12px;color:#888;margin:-4px 0 0 26px">À ne cocher que pour un contenu dont vous pouvez diffuser le lien ou le fichier aux parents (pas de contenu de tiers réservé à la formation).</div>'+
     '<div class="msg" id="s-msg"></div>'+
     '<div class="rangee"><button class="btn" id="s-ok">Enregistrer</button>'+(s?'<button class="btn btn-danger" id="s-sup">Supprimer</button>':'')+'</div>');
   $('s-x').onclick=spFermer;
@@ -407,7 +507,7 @@ function spSupportForm(id){
     if(f&&f.size>52428800){msg.textContent='Fichier trop lourd (50 Mo maximum). Pour une vidéo, déposez-la sur YouTube et collez le lien.';msg.className='msg ko';return;}
     $('s-ok').disabled=true;msg.textContent='Enregistrement…';
     try{
-      const row={titre,description:$('s-desc').value.trim()||null,theme_id:$('s-th').value,a_voir:$('s-prio').checked};
+      const row={titre,description:$('s-desc').value.trim()||null,theme_id:$('s-th').value,a_voir:$('s-prio').checked,famille:$('s-fam').checked};
       if(f){
         const chemin=crypto.randomUUID()+'/'+spNomSur(f.name);
         const up=await sb.storage.from(SP_BUCKET).upload(chemin,f,{contentType:f.type||'application/octet-stream'});
@@ -547,14 +647,18 @@ window.addEventListener('DOMContentLoaded',async function(){
     const {data:{session}}=await sb.auth.getSession();
     if(!session){spEtat('<strong>Connexion requise</strong><br>Connectez-vous à l\'application pour accéder aux supports pédagogiques.<br><br><a href="demandes.html">Se connecter</a>');return;}
     SP.user=session.user;
-    const {data:ref}=await sb.from('referents').select('role').eq('user_id',SP.user.id).maybeSingle();
+    const {data:ref}=await sb.from('referents').select('id,name,role,creche_id').eq('user_id',SP.user.id).maybeSingle();
     SP.direction=!!ref&&ref.role==='direction';
+    SP.moi=ref||null;
+    SP.gestion=!!ref&&(ref.role==='direction'||ref.role==='referent');   // propose aux familles
+    SP.enfantCible=new URLSearchParams(location.search).get('enfant');
     await spCharger();
     $('actions-dir').hidden=!SP.direction;
     $('btn-ajout').onclick=()=>spSupportForm(null);
     $('btn-import').onclick=spImportForm;
     $('btn-apercus').onclick=spImportApercusForm;
     spEtat('');$('wrap').hidden=false;
+    if(SP.gestion&&SP.enfantCible)spBandeauEnfant();
     if(!SP.themes.length&&!SP.direction)spEtat('Aucun support disponible pour le moment.');
     spDessiner();
   }catch(e){
