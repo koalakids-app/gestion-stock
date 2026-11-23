@@ -86,14 +86,14 @@ function renderCouchesRecap() {
     // 2) Par enfant × mois
     const enfants = new Map();
     l.forEach(x => {
-      if (!enfants.has(x.enfantId)) enfants.set(x.enfantId, { nom: x.prenom + ' ' + (x.nom || '').charAt(0) + '.', prod: (x.typeCouche === 'culotte' ? 'Culotte' : 'Couche') + (x.taille ? ' T' + x.taille : ''), m: {}, tot: 0 });
-      const e = enfants.get(x.enfantId); e.m[x.mois] = (e.m[x.mois] || 0) + x.nb; e.tot += x.nb;
+      if (!enfants.has(x.enfantId)) enfants.set(x.enfantId, { nom: x.prenom + ' ' + (x.nom || '').charAt(0) + '.', prod: (x.typeCouche === 'culotte' ? 'Culotte' : 'Couche') + (x.taille ? ' T' + x.taille : ''), m: {}, tot: 0, jours: 0 });
+      const e = enfants.get(x.enfantId); e.m[x.mois] = (e.m[x.mois] || 0) + x.nb; e.tot += x.nb; e.jours += x.jours || 0;
     });
     const liste = [...enfants.values()].sort((a, b) => b.tot - a.tot);
     html += `<details style="margin-top:8px"><summary style="cursor:pointer;font-size:12px;color:var(--accent);font-weight:600">Détail par enfant (${liste.length})</summary>
       <div style="overflow-x:auto;margin-top:6px"><table style="border-collapse:collapse;width:100%">
-      <tr><th style="${th};text-align:left">Enfant</th><th style="${th};text-align:left">Produit</th>${mois.map(m => `<th style="${th}">${recapMoisLabel(m)}</th>`).join('')}<th style="${th}">Total</th></tr>
-      ${liste.map(e => `<tr><td style="${tdn}">${recapEsc(e.nom)}</td><td style="${tdn};color:var(--ink3)">${e.prod}</td>${mois.map(m => `<td style="${td}">${nbf(e.m[m] || 0)}</td>`).join('')}<td style="${td}"><b>${e.tot.toLocaleString('fr-FR')}</b></td></tr>`).join('')}
+      <tr><th style="${th};text-align:left">Enfant</th><th style="${th};text-align:left">Produit</th>${mois.map(m => `<th style="${th}">${recapMoisLabel(m)}</th>`).join('')}<th style="${th}">Total</th><th style="${th}" title="Couches par jour d'accueil avec saisie">Moy./jour</th></tr>
+      ${liste.map(e => `<tr><td style="${tdn}">${recapEsc(e.nom)}</td><td style="${tdn};color:var(--ink3)">${e.prod}</td>${mois.map(m => `<td style="${td}">${nbf(e.m[m] || 0)}</td>`).join('')}<td style="${td}"><b>${e.tot.toLocaleString('fr-FR')}</b></td><td style="${td}">${e.jours ? (e.tot / e.jours).toLocaleString('fr-FR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : '–'}</td></tr>`).join('')}
       </table></div></details>`;
   });
   html += `</div>`;

@@ -239,7 +239,7 @@ couches: `
 <div style="font-weight:700;font-size:14px;margin-bottom:10px">📊 Consommation par mois</div>
 <ul style="font-size:13px;line-height:1.9;margin:0 0 18px 18px;padding:0">
   <li>Sous la valeur du stock : pour chaque <strong>crèche</strong>, les couches utilisées sur les <strong>12 derniers mois</strong>, le nombre d'enfants concernés et la valeur (prix d'achat).</li>
-  <li><strong>Détail par enfant</strong> (à déplier) : une ligne par enfant, un total par mois et un total général. <strong>⬇️ CSV</strong> exporte ce tableau pour Excel.</li>
+  <li><strong>Détail par enfant</strong> (à déplier) : une ligne par enfant, un total par mois, un total général et la <strong>moyenne de couches par jour d'accueil</strong> (aide à choisir le forfait de l'enfant au renouvellement du contrat). <strong>⬇️ CSV</strong> exporte ce tableau pour Excel.</li>
   <li>Les chiffres viennent des saisies « Couches du jour » ; le produit affiché est celui de la fiche enfant aujourd'hui.</li>
 </ul>
 <div style="font-weight:700;font-size:14px;margin-bottom:10px">🛒 Besoins pour la commande</div>
