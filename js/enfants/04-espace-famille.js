@@ -5,6 +5,7 @@
    function `espace-famille`. Un accès révoqué n'est jamais supprimé. */
 let enfEspaceCache = [];   // accès de l'enfant ouvert (actifs et révoqués)
 let enfEspaceEnfant = null; // enfant auquel appartient le cache
+let enfSoutiens = [];       // soutiens proposés à l'enfant ouvert (famille_soutiens)
 
 function espaceLien(a){
   return location.origin + location.pathname.replace(/[^/]*$/,'') + 'espace-famille.html?t=' + a.code;
@@ -23,8 +24,42 @@ async function enfEspaceCharger(enfantId){
     console.warn('enfEspaceCharger',err);
     enfEspaceCache=[];
   }
+  await enfSoutiensCharger(enfantId);
   if(String(enfFicheId)!==String(enfantId)) return;
   enfEspaceRender();
+}
+
+
+/* Soutiens proposés à la famille (Supports pédagogiques › « Proposer à des familles »,
+   sql/famille_soutiens.sql) : lecture seule ici, avec l'état (ouvert, retour de la famille). */
+const ENF_RETOUR={utile:'👍 Utile',bof:'🤔 Bof',en_parler:'💬 Souhaite en parler'};
+async function enfSoutiensCharger(enfantId){
+  try{
+    const{data,error}=await sb.from('famille_soutiens').select('id,support_id,mot,created_at,ouvert_le,retour,retour_le,auteur_nom')
+      .eq('enfant_id',enfantId).order('created_at',{ascending:false}).limit(30);
+    if(error) throw error;
+    const ids=[...new Set((data||[]).map(x=>x.support_id))];
+    let titres={};
+    if(ids.length){
+      const t=await sb.from('supports_pedagogiques').select('id,titre').in('id',ids);
+      (t.data||[]).forEach(x=>{titres[x.id]=x.titre;});
+    }
+    enfSoutiens=(data||[]).map(x=>({...x,titre:titres[x.support_id]||'Support supprimé'}));
+  }catch(err){
+    console.warn('enfSoutiensCharger',err);
+    enfSoutiens=[];
+  }
+}
+function enfSoutiensHtml(){
+  const bouton='<button class="btn-sm" onclick="location.href=\'supports-pedagogiques.html?enfant='+enfEspaceEnfant+'\'"><i class="ti ti-bulb"></i> Proposer un soutien</button>';
+  const liste=enfSoutiens.length
+    ?'<div style="margin-top:8px">'+enfSoutiens.map(x=>'<div style="border-top:1px solid var(--border);padding:6px 0;font-size:12.5px">'
+      +'<b>'+escHtml(x.titre)+'</b> <span style="color:var(--muted)">· '+new Date(x.created_at).toLocaleDateString('fr-FR')+(x.auteur_nom?' · '+escHtml(x.auteur_nom):'')+'</span><br>'
+      +'<span style="color:var(--muted)">'+(x.ouvert_le?'Ouvert le '+new Date(x.ouvert_le).toLocaleDateString('fr-FR'):'Pas encore ouvert')+'</span>'
+      +(x.retour?' · <b>'+escHtml(ENF_RETOUR[x.retour]||x.retour)+'</b>':'')+'</div>').join('')+'</div>'
+    :'';
+  return '<div style="border-top:1px solid var(--border);margin-top:10px;padding-top:10px"><div style="font-weight:700;font-size:13px;color:var(--koala-dark);margin-bottom:4px"><i class="ti ti-bulb"></i> Soutiens proposés à la famille</div>'
+    +bouton+'<div style="font-size:11.5px;color:var(--muted);margin-top:5px">Un support pédagogique choisi pour cet enfant, avec un mot pour les parents ; ils répondent « utile », « bof » ou « j\'aimerais en parler ».</div>'+liste+'</div>';
 }
 
 function enfEspaceRender(){
@@ -56,7 +91,8 @@ function enfEspaceRender(){
     +lignes
     +'<div style="border-top:1px solid var(--border);margin-top:4px;padding-top:10px"><button class="btn-sm" onclick="openMsgFamilles(\''+enfEspaceEnfant+'\')"><i class="ti ti-message-2"></i> Envoyer un message aux parents</button> '
     +'<button class="btn-sm" onclick="enfMailParents()"><i class="ti ti-mail"></i> Envoyer un mail aux parents</button>'
-    +'<div style="font-size:11.5px;color:var(--muted);margin-top:5px">Lu dans l\'Espace famille (onglet Infos) avec une notification ; reçu par les parents de cet enfant qui ont un accès actif.</div></div></div>';
+    +'<div style="font-size:11.5px;color:var(--muted);margin-top:5px">Lu dans l\'Espace famille (onglet Infos) avec une notification ; reçu par les parents de cet enfant qui ont un accès actif.</div></div>'
+    +enfSoutiensHtml()+'</div>';
 }
 
 async function enfEspaceCreer(parentId){
