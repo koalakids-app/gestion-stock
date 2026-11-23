@@ -549,8 +549,19 @@ async function renvoyerInvitation(id){
 async function accorderAccesTerrain(id,partager){
   const e=cacheEmployes.find(x=>x.id===id);
   if(!e||!e.email)return;
-  const{data:deja}=await sb.from('referents').select('id').ilike('email',e.email).maybeSingle();
-  if(deja){eqToast('Cette adresse est déjà utilisée par un compte directeur/référent : utilisez une autre adresse sur la fiche.',true);return;}
+  const{data:deja}=await sb.from('referents').select('id,role,user_id,employe_id').ilike('email',e.email).maybeSingle();
+  if(deja){
+    /* Profil terrain déjà créé (role employe) mais pas relié à la fiche : on le relie. */
+    const memeCompte=deja.role==='employe'&&(!e.user_id||!deja.user_id||deja.user_id===e.user_id);
+    if(memeCompte&&(!deja.employe_id||deja.employe_id===id)){
+      if(deja.employe_id===id){eqToast('L\'accès terrain de '+e.prenom+' existe déjà.');return;}
+      const{error:errLien}=await sb.from('referents').update({employe_id:id}).eq('id',deja.id);
+      if(errLien){eqToast('Le lien avec la fiche a échoué : '+errLien.message,true);return;}
+      eqToast('Accès terrain relié à la fiche de '+e.prenom+'.');
+      await eqRecharger();return;
+    }
+    eqToast('Cette adresse est déjà utilisée par un compte directeur/référent : utilisez une autre adresse sur la fiche.',true);return;
+  }
   if(!confirm(e.user_id?'Accorder l\'accès terrain à '+e.prenom+' ? Elle/il utilisera le même identifiant que pour Mon espace.'
     :partager?'Accorder l\'accès terrain à '+e.prenom+' et partager le lien d\'invitation (aucun e-mail ne sera envoyé) ?'
     :'Accorder l\'accès terrain à '+e.prenom+' ? Un e-mail d\'invitation sera envoyé à '+e.email+'.'))return;
