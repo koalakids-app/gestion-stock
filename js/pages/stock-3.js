@@ -236,6 +236,12 @@ couches: `
   <li>Le cadre est <strong>rouge</strong> sous le seuil d'alerte, et rouge foncé en <strong>rupture imminente</strong> : le délai de livraison dépasse le stock restant, il faut commander aujourd'hui. Un récapitulatif des alertes s'affiche en haut de page.</li>
   <li>La <strong>valeur du stock</strong> est calculée avec les prix d'achat unitaires ; les tailles sans prix sont signalées et exclues du total. La direction renseigne les prix avec « Modifier les prix d'achat ».</li>
 </ul>
+<div style="font-weight:700;font-size:14px;margin-bottom:10px">📊 Consommation par mois</div>
+<ul style="font-size:13px;line-height:1.9;margin:0 0 18px 18px;padding:0">
+  <li>Sous la valeur du stock : pour chaque <strong>crèche</strong>, les couches utilisées sur les <strong>12 derniers mois</strong>, le nombre d'enfants concernés et la valeur (prix d'achat).</li>
+  <li><strong>Détail par enfant</strong> (à déplier) : une ligne par enfant, un total par mois et un total général. <strong>⬇️ CSV</strong> exporte ce tableau pour Excel.</li>
+  <li>Les chiffres viennent des saisies « Couches du jour » ; le produit affiché est celui de la fiche enfant aujourd'hui.</li>
+</ul>
 <div style="font-weight:700;font-size:14px;margin-bottom:10px">🛒 Besoins pour la commande</div>
 <ul style="font-size:13px;line-height:1.9;margin:0 0 18px 18px;padding:0">
   <li>En haut de la page, un tableau par <strong>crèche</strong> et par <strong>taille</strong> : <strong>besoin</strong> du mois (4 couches par jour × jours de présence prévus, hors fériés, fermetures et absences programmées), <strong>stock</strong> actuel et quantité <strong>à commander</strong> (besoin − stock) avec son coût.</li>
