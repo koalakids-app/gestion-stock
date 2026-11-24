@@ -15,6 +15,8 @@ let lcFins={},lcFinsErreur=false;
 let lcAVenir={};
 let lcChoix={};
 let lcDevis=[];
+let lcRemis={};          // enfant_id -> true pour l'année de référence (sql/livres_cadeaux_remis.sql)
+let lcRemiseOuvert=false;
 const lcEuro=n=>(Math.round(n*100)/100).toLocaleString('fr-FR',{minimumFractionDigits:2,maximumFractionDigits:2})+' €';
 const lcPrix=k=>{const p=lcChoix[k]&&lcChoix[k].prix;return p==null||p===''?0:Number(p)||0;};
 // Choix du livre par tranche (sql/livres_cadeaux_choix.sql) ; sans la table, les prix restent vides.
@@ -111,6 +113,7 @@ function lcInit(){
   lcChargerFins();
   lcChargerChoix();
   lcChargerDevis();
+  lcChargerRemis();
 }
 // Mois complets entre la naissance et la date de référence (négatif = pas encore né).
 function lcAgeMois(dob,ref){
@@ -163,6 +166,37 @@ function lcChoixHtml(){
   return`<div style="max-width:1000px;margin-bottom:16px"><div style="font-weight:700;color:var(--koala);margin-bottom:6px">Livre choisi par tranche d’âge${ed?'':' <span style="font-weight:400;font-size:12px;color:var(--muted)">(défini par la direction)</span>'}</div>
     <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px">${LC_TRANCHES.map(carte).join('')}</div></div>`;
 }
+function lcAnnee(){return Number((document.getElementById('lc-date')?.value||lcDateParDefaut()).slice(0,4));}
+async function lcChargerRemis(){
+  try{
+    const r=await sb.from('livres_cadeaux_remis').select('enfant_id').eq('annee',lcAnnee());
+    if(r.error)throw r.error;
+    const m={};(r.data||[]).forEach(x=>{m[x.enfant_id]=true;});lcRemis=m;
+  }catch(err){console.warn('lcChargerRemis',err);lcRemis={};}
+  lcRender();
+}
+async function lcRemisCocher(id,coche){
+  const e=cacheEnfants.find(x=>String(x.id)===String(id));if(!e)return;
+  const r=coche
+    ?await sb.from('livres_cadeaux_remis').upsert({creche_id:e.creche_id,enfant_id:id,annee:lcAnnee(),remis_le:new Date().toISOString()},{onConflict:'enfant_id,annee'})
+    :await sb.from('livres_cadeaux_remis').delete().eq('enfant_id',id).eq('annee',lcAnnee());
+  if(r.error){showBanner('Enregistrement impossible (script SQL livres_cadeaux_remis appliqué ?).','error');lcRender();return;}
+  if(coche)lcRemis[id]=true;else delete lcRemis[id];
+  lcRender();
+}
+function lcRemiseToggle(){lcRemiseOuvert=!lcRemiseOuvert;lcRender();if(lcRemiseOuvert)document.getElementById('lc-remise')?.scrollIntoView({behavior:'smooth',block:'start'});}
+// Récapitulatif nominatif à cocher : prénom + initiale, par tranche d'âge.
+function lcRemiseHtml(){
+  const g=lcDonnees.g;
+  const tous=LC_TRANCHES.reduce((a,t)=>a.concat(g[t.k]),[]);
+  const nb=tous.filter(x=>lcRemis[x.e.id]).length;
+  const bloc=t=>g[t.k].length?`<div style="margin-top:10px"><div style="font-weight:700;color:var(--koala);font-size:13px">${t.lib} <span style="font-weight:400;color:var(--muted)">(${g[t.k].filter(x=>lcRemis[x.e.id]).length}/${g[t.k].length})</span></div>`
+    +g[t.k].map(x=>`<label style="display:flex;align-items:center;gap:8px;padding:5px 0;border-top:1px solid #F1EFF7;font-size:14px;cursor:pointer"><input type="checkbox" ${lcRemis[x.e.id]?'checked':''} onchange="lcRemisCocher('${x.e.id}',this.checked)" style="width:18px;height:18px"><span style="${lcRemis[x.e.id]?'text-decoration:line-through;color:var(--muted)':''}">${lcEsc(lcPrenomInitiale(x.e))}</span><span style="margin-left:auto;font-size:12px;color:var(--muted)">${lcAgeTexte(x.m)}</span></label>`).join('')+'</div>':'';
+  return`<div id="lc-remise" style="max-width:1000px;margin:0 0 16px;background:#fff;border:1.5px solid #E6E3F3;border-radius:12px;padding:10px 14px">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><b style="color:var(--koala)"><i class="ti ti-gift"></i> Suivi de remise ${lcAnnee()} — ${nb}/${tous.length} cadeau${tous.length>1?'x':''} remis</b>
+      <button class="btn-sm" onclick="lcRemiseToggle()"><i class="ti ti-x"></i> Fermer</button></div>
+    ${tous.length?LC_TRANCHES.map(bloc).join(''):'<div style="font-size:13px;color:var(--muted);margin-top:6px">Aucun enfant.</div>'}</div>`;
+}
 function lcRender(){
   const z=document.getElementById('lc-contenu');if(!z)return;
   if(!lcCrecheId()){z.innerHTML='<div style="color:var(--muted);padding:20px">Aucune crèche sélectionnée.</div>';return;}
@@ -175,7 +209,7 @@ function lcRender(){
     ${g[t.k].length?g[t.k].map(x=>`<div style="font-size:13px;padding:3px 0;border-top:1px solid #F1EFF7;display:flex;justify-content:space-between;gap:8px"><span>${lcEsc(lcPrenomInitiale(x.e))}${(lcAVenir[x.e.id]||x.e.date_entree||'')>lcDonnees.ref?' <span style="font-size:11px;color:var(--muted)">(entrée le '+lcEsc(lcDateFr(lcAVenir[x.e.id]||x.e.date_entree))+')</span>':''}</span><span style="color:var(--muted)">${lcAgeTexte(x.m)}</span></div>`).join(''):'<div style="font-size:12px;color:var(--muted)">Aucun enfant</div>'}
   </div>`;
   const budget=LC_TRANCHES.reduce((a,t)=>a+g[t.k].length*lcPrix(t.k),0);
-  z.innerHTML=lcChoixHtml()+lcDevisHtml()+(lcFinsErreur?'<div style="margin-bottom:10px;max-width:1000px;background:#FDE8E8;border-radius:10px;padding:10px 14px;font-size:13px;color:#8A1C1C"><b>Fins de contrat non chargées</b> : les enfants dont le contrat est terminé ne sont pas écartés. Rechargez la page ; si le message revient, vérifiez les droits de lecture sur les contrats.</div>':'')+`<div style="font-weight:700;color:var(--koala);margin-bottom:10px">${total} livre${total>1?'s':''} à prévoir${budget?' · budget '+lcEuro(budget):''} · âges au ${lcDateFr(lcDonnees.ref)}</div>
+  z.innerHTML=(lcRemiseOuvert?lcRemiseHtml():'')+lcChoixHtml()+lcDevisHtml()+(lcFinsErreur?'<div style="margin-bottom:10px;max-width:1000px;background:#FDE8E8;border-radius:10px;padding:10px 14px;font-size:13px;color:#8A1C1C"><b>Fins de contrat non chargées</b> : les enfants dont le contrat est terminé ne sont pas écartés. Rechargez la page ; si le message revient, vérifiez les droits de lecture sur les contrats.</div>':'')+`<div style="font-weight:700;color:var(--koala);margin-bottom:10px">${total} livre${total>1?'s':''} à prévoir${budget?' · budget '+lcEuro(budget):''} · âges au ${lcDateFr(lcDonnees.ref)}</div>
     <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px;max-width:1000px">${LC_TRANCHES.map(carte).join('')}</div>`
     +(g.sans.length?`<div style="margin-top:14px;max-width:1000px;background:#FFF3DC;border-radius:10px;padding:10px 14px;font-size:13px;color:#6B4300">
       <b>À vérifier (${g.sans.length})</b> : date de naissance manquante ou postérieure à la date choisie, enfant non compté.<br>${g.sans.map(x=>lcEsc(lcPrenomInitiale(x.e))).join(', ')}</div>`:'');
@@ -366,41 +400,4 @@ async function lcDevisSupprimer(id){
   if(r.error){showBanner('Suppression impossible.','error');return;}
   await sb.storage.from('livres-devis').remove([d.fichier_path]);
   lcChargerDevis();
-}
-
-/* Export Excel du budget : synthèse (direction, toutes crèches) + une feuille par crèche. */
-function lcExcel(toutes){
-  if(typeof XLSX==='undefined'){showBanner('Bibliothèque Excel non chargée.','error');return;}
-  const ref=document.getElementById('lc-date').value||lcDateParDefaut();
-  const creches=toutes&&isDirection?cacheCreches:cacheCreches.filter(c=>String(c.id)===String(lcCrecheId()));
-  const wb=XLSX.utils.book_new();
-  const nomFeuille=(n,i)=>String(n||'Crèche').replace(/[\\\/?*\[\]:]/g,' ').slice(0,28)+(i?' '+i:'');
-  const synth=[['Livres cadeaux — budget','','','','','Âges au '+lcDateFr(ref)],[],['Crèche'].concat(LC_TRANCHES.map(t=>t.lib),['Nombre total','Budget (€)','Devis joint (€)','Écart devis − budget (€)'])];
-  const feuilles=[];
-  creches.forEach(c=>{
-    const d=lcCalculer(c.id),n=LC_TRANCHES.map(t=>d.g[t.k].length),budget=n.reduce((a,x,i)=>a+x*lcPrix(LC_TRANCHES[i].k),0),dv=lcDevisMontant(c.id);
-    synth.push([c.name].concat(n,[n.reduce((a,b)=>a+b,0),budget,dv===null?'':dv,dv===null?'':Math.round((dv-budget)*100)/100]));
-    const rows=[['Livres cadeaux — '+c.name],['Âges au '+lcDateFr(ref)],[],['Tranche d’âge','Livre choisi','Prix unitaire (€)','Nombre','Montant (€)']];
-    LC_TRANCHES.forEach((t,i)=>rows.push([t.lib,(lcChoix[t.k]||{}).titre||'Livre non choisi',lcChoix[t.k]&&lcChoix[t.k].prix!=null?Number(lcChoix[t.k].prix):'',n[i],Math.round(n[i]*lcPrix(t.k)*100)/100]));
-    rows.push(['Total','','',n.reduce((a,b)=>a+b,0),Math.round(budget*100)/100]);
-    const dl=lcDevis.filter(x=>String(x.creche_id)===String(c.id));
-    if(dl.length){rows.push([],['Devis du libraire','','','','Montant (€)']);dl.forEach(x=>rows.push([x.fichier_nom,'','','',x.montant==null?'':Number(x.montant)]));
-      if(dv!==null)rows.push(['Total des devis','','','',dv],['Écart devis − budget','','','',Math.round((dv-budget)*100)/100]);}
-    if(d.g.sans.length)rows.push([],['Non comptés (date de naissance manquante) : '+d.g.sans.map(x=>lcPrenomInitiale(x.e)).join(', ')]);
-    feuilles.push([nomFeuille(c.name),rows,[{wch:22},{wch:34},{wch:16},{wch:10},{wch:14}]]);
-  });
-  if(toutes&&isDirection){
-    const tot=['Toutes les crèches'];
-    for(let j=1;j<synth[2].length;j++){tot.push(synth.slice(3).reduce((a,r)=>a+(Number(r[j])||0),0));}
-    synth.push(tot);
-    const ws=XLSX.utils.aoa_to_sheet(synth);ws['!cols']=[{wch:26}].concat(Array(8).fill({wch:16}));
-    XLSX.utils.book_append_sheet(wb,ws,'Synthèse');
-  }
-  const vus={};
-  feuilles.forEach(([nom,rows,cols])=>{
-    vus[nom]=(vus[nom]||0)+1;
-    const ws=XLSX.utils.aoa_to_sheet(rows);ws['!cols']=cols;
-    XLSX.utils.book_append_sheet(wb,ws,vus[nom]>1?nom.slice(0,27)+' '+vus[nom]:nom);
-  });
-  XLSX.writeFile(wb,'livres-cadeaux-budget-'+ref+'.xlsx');
 }
