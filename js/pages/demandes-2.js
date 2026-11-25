@@ -1048,7 +1048,9 @@ album: `
 </ol>
 <div style="font-weight:700;font-size:14px;margin-bottom:10px">🎁 Départ définitif de l’enfant</div>
 <ol style="font-size:13px;line-height:2;color:#555;padding-left:20px;margin-bottom:18px">
+  <li><strong>Livre PDF :</strong> dans l’album d’un enfant, ce bouton produit un livre de souvenirs A4 (couverture, une page par mois en ordre chronologique avec la date de chaque photo, page de fin). Un mois très rempli passe sur plusieurs pages ; un mois sans photo n’apparaît pas.</li>
   <li>Dans l’album de l’enfant, touchez <strong>Départ : remise aux parents</strong>.</li>
+  <li>Dans le panneau de remise, cochez ce que vous voulez dans le livre (couverture, date, page de fin) ; le <strong>.zip</strong> range les photos par dossier de mois et y joint le livre PDF.</li>
   <li><strong>Préparer le .zip</strong> : téléchargez toutes les photos de l’enfant, à copier sur une clé USB ou un disque chiffré.</li>
   <li>Cochez <strong>Remise confirmée</strong> quand les parents ont reçu les photos, puis <strong>Supprimer</strong>. Les photos où l’enfant est seul sont effacées ; les photos de groupe restent dans l’album des autres enfants. Rien n’est archivé.</li>
 </ol>
