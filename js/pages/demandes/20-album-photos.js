@@ -256,6 +256,7 @@ async function albRenderEnfant(z) {
     '<b style="font-size:16px;color:var(--koala)">Album de ' + albEsc(albNom(e)) + '</b><span class="alb-ct">' + ph.length + ' photo' + (ph.length > 1 ? 's' : '') + '</span>' +
     '<span style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap">' +
     '<button class="btn-sm" style="background:var(--koala);color:#fff;border-color:var(--koala)" onclick="albChoisir()"><i class="ti ti-photo-plus"></i> Ajouter des photos</button>' +
+    '<button class="btn-sm" ' + (ph.length ? '' : 'disabled') + ' onclick="albLivre()"><i class="ti ti-book"></i> Livre PDF</button>' +
     '<button class="btn-sm" ' + (ph.length ? '' : 'disabled') + ' onclick="albZip(false)"><i class="ti ti-file-zip"></i> Télécharger (.zip)</button>' +
     '<button class="btn-sm" onclick="albPanneauRemise()"><i class="ti ti-gift"></i> Départ : remise aux parents</button></span></div>' +
     '<div id="alb-remise"></div><div id="alb-droit"></div>';
@@ -350,7 +351,8 @@ function albPanneauRemise() {
   var seules = ph.filter(function (p) { return albEnfantsDe(p.id).length === 1; }).length;
   z.innerHTML = '<div class="alb-remise"><div style="font-weight:700;margin-bottom:4px">Remise des photos aux parents</div>' +
     '<div class="alb-ct" style="margin-bottom:10px">Les photos sont données aux parents, puis supprimées. Rien n’est archivé.</div>' +
-    '<label class="alb-etape"><input type="checkbox" id="alb-e1" disabled ' + (ALB.zipPret ? 'checked' : '') + '><span><b>1. Préparer la remise</b> : dossier .zip de ' + ph.length + ' photo' + (ph.length > 1 ? 's' : '') + ' à copier sur une clé USB ou un disque chiffré.' +
+    albOptionsHtml() +
+    '<label class="alb-etape"><input type="checkbox" id="alb-e1" disabled ' + (ALB.zipPret ? 'checked' : '') + '><span><b>1. Préparer la remise</b> : dossier .zip de ' + ph.length + ' photo' + (ph.length > 1 ? 's' : '') + ' rangées par mois (avec le livre PDF) à copier sur une clé USB ou un disque chiffré.' +
     ' <button class="btn-sm" style="display:inline-flex;margin-left:6px" onclick="event.preventDefault();albZip(true)"><i class="ti ti-file-zip"></i> Préparer le .zip</button></span></label>' +
     '<label class="alb-etape"><input type="checkbox" id="alb-e2" ' + (ALB.remis ? 'checked' : '') + ' ' + (ALB.zipPret ? '' : 'disabled') + ' onchange="ALB.remis=this.checked;albMajRemise()"><span><b>2. Remise confirmée</b> : les parents ont bien reçu les photos.</span></label>' +
     '<div class="alb-ct" style="margin:6px 0 10px">Suppression : ' + seules + ' photo' + (seules > 1 ? 's' : '') + ' où ' + albEsc(e.prenom || 'l’enfant') + ' est seul·e ' + (seules > 1 ? 'seront' : 'sera') + ' effacée' + (seules > 1 ? 's' : '') + '. Les photos de groupe restent dans l’album des autres enfants : seul le lien avec cet enfant est retiré.</div>' +
@@ -368,23 +370,21 @@ async function albZip(depuisRemise) {
   ALB.occupe = true;
   var zip = new JSZip(), n = 0, echec = 0;
   try {
-    await albUrls(ph.map(function (p) { return p.chemin; }));
-    for (var i = 0; i < ph.length; i++) {
-      showBanner('Préparation du .zip : ' + (i + 1) + ' / ' + ph.length + '…');
-      try {
-        var resp = await fetch(albUrl(ph[i].chemin));
-        if (!resp.ok) throw new Error('HTTP ' + resp.status);
-        zip.file(albDateFr(ph[i].prise_le).replace(/\//g, '-') + '_' + String(i + 1).padStart(3, '0') + '.jpg', await resp.blob());
-        n++;
-      } catch (err) { echec++; console.warn('[albZip]', err); }
+    var rec = await albRecupererBlobs(ph, 'Préparation du .zip');
+    echec = rec.echec;
+    albParMois(ph).forEach(function (mo) {
+      var dos = zip.folder(albMoisDossier(mo.cle));
+      mo.photos.forEach(function (p, i) {
+        if (!rec.blobs[p.id]) return;
+        dos.file(String(p.prise_le).slice(0, 10) + '_' + String(i + 1).padStart(3, '0') + '.jpg', rec.blobs[p.id]); n++;
+      });
+    });
+    if (n && albOptions().livre) {
+      try { zip.file('Album_' + albSlug(e) + '.pdf', await albConstruireLivre(e, ph, rec.blobs)); }
+      catch (err) { console.warn('[albZip livre]', err); showBanner('Le livre PDF n’a pas pu être ajouté au .zip (les photos y sont).', 'error'); }
     }
-    if (!n) throw new Error('aucune photo récupérée');
     var blob = await zip.generateAsync({ type: 'blob', compression: 'STORE' });
-    var slug = albNom(e).normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^A-Za-z0-9]+/g, '_').replace(/^_|_$/g, '');
-    var a = document.createElement('a');
-    a.href = URL.createObjectURL(blob); a.download = 'Photos_' + slug + '.zip';
-    document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(function () { URL.revokeObjectURL(a.href); }, 60000);
+    albTelecharger(blob, 'Photos_' + albSlug(e) + '.zip');
     if (echec) showBanner('Dossier .zip téléchargé, mais ' + echec + ' photo' + (echec > 1 ? 's' : '') + ' n’ont pas pu être ajoutée' + (echec > 1 ? 's' : '') + '. Ne supprimez rien avant d’avoir réessayé.', 'error');
     else { showBanner('Dossier .zip téléchargé (' + n + ' photos).'); if (depuisRemise) ALB.zipPret = true; }
   } catch (err) {
