@@ -1047,7 +1047,7 @@ async function renderPresenceGantt(){
     rowsHtml+='<div onclick="enfOpenFiche(\''+e.id+'\')" style="width:'+NAME_W+'px;flex-shrink:0;font-size:12px;font-weight:'+(absent?'400':'600')+';color:'+(absent?'var(--muted)':'var(--koala)')+';padding-right:8px;text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer" title="Ouvrir le dossier de '+escHtml(e.prenom+' '+e.nom)+(e.dob?'':' (date de naissance manquante)')+'">'+escHtml(e.prenom+' '+e.nom)+(horsJour?' <span style="display:inline-flex;align-items:center;gap:2px;background:var(--orange);color:#fff;font-size:9.5px;font-weight:800;border-radius:8px;padding:1.5px 6px;margin-left:4px;vertical-align:middle" title="Aucun contrat ce jour de la semaine"><i class="ti ti-alert-triangle" style="font-size:10px"></i> Hors contrat</span>':'')+'\u0001I'+e.id+'\u0001'+(e.dob?'':' <span style=\"color:var(--red);font-size:10px\">⚠</span>')+'</div>';
     rowsHtml+='</div>';
     // Barre Gantt
-    rowsHtml+='<div style="position:relative;width:'+(COLS*COL_W)+'px;flex-shrink:0;height:44px;border-left:1px solid #e0dff0">';
+    rowsHtml+='<div style="position:relative;width:'+(COLS*COL_W)+'px;flex-shrink:0;height:56px;border-left:1px solid #e0dff0">';
     // Lignes verticales des heures
     for(let c=0;c<COLS;c+=2){
       rowsHtml+='<div style="position:absolute;left:'+(c*COL_W)+'px;top:0;bottom:0;border-left:1px solid '+(c===0?'transparent':'#ece9f5')+';pointer-events:none"></div>';
@@ -1055,21 +1055,50 @@ async function renderPresenceGantt(){
     // Bande 12h (s\u00e9parateur matin/apm)
     rowsHtml+='<div style="position:absolute;left:'+(12*COL_W)+'px;top:0;bottom:0;border-left:1px dashed #b0a8d8;pointer-events:none"></div>';
     if(absent){
-      rowsHtml+='<div style="position:absolute;left:4px;right:4px;top:17px;height:10px;background:#f0eef8;border-radius:5px"></div>';
+      rowsHtml+='<div style="position:absolute;left:4px;right:4px;top:23px;height:10px;background:#f0eef8;border-radius:5px"></div>';
     }else{
       // Arrière-plan : horaire de contrat, seulement quand une barre de pointage réel est affichée par-dessus.
       bgCtSegments.forEach(seg=>{
         const left=seg.start*COL_W;const width=(seg.end-seg.start)*COL_W-2;
-        rowsHtml+='<div title="Horaire de contrat : '+escHtml(ctH.debut||'')+'–'+escHtml(ctH.fin||'')+'" style="position:absolute;left:'+left+'px;width:'+width+'px;top:12px;height:20px;background:#e8e6ef;border:1px solid #d3d0e0;border-radius:7px"></div>';
+        rowsHtml+='<div title="Horaire de contrat : '+escHtml(ctH.debut||'')+'–'+escHtml(ctH.fin||'')+'" style="position:absolute;left:'+left+'px;width:'+width+'px;top:18px;height:20px;background:#e8e6ef;border:1px solid #d3d0e0;border-radius:7px"></div>';
       });
+      /* Repères d'arrivée / départ : trait à l'heure exacte pointée + étiquette (arrivée au-dessus,
+         départ en dessous). Teinte selon l'écart avec l'horaire du contrat : vert ≤ 10 min,
+         orange jusqu'à 30 min, rouge au-delà. Sans horaire de contrat : vert neutre. */
+      let _ecTxt='';
+      if(pointeReel){
+        const _mnP=function(t){const m=/^(\d{1,2}):(\d{2})/.exec(String(t||''));return m?(parseInt(m[1],10)-H_START)*60+parseInt(m[2],10):null;};
+        const _px=function(mn){return Math.max(0,Math.min(COLS*COL_W-1,Math.round(mn/30*COL_W)));};
+        const _teinte=function(ec){
+          if(ec===null)return{c:'#1f5c42',bg:'#fff',bd:'#9fd6bb'};
+          const a=Math.abs(ec);
+          return a>30?{c:'#c62828',bg:'#fff',bd:'#c62828'}:a>10?{c:'#7a3d0c',bg:'#fbd9bd',bd:'#f3bb8f'}:{c:'#1f5c42',bg:'#fff',bd:'#9fd6bb'};
+        };
+        const _ecart=function(reel,prevu){const a=_mnP(reel),b=_mnP(prevu);return(a===null||b===null)?null:a-b;};
+        const _signe=function(n){return(n>0?'+':n<0?'\u2212':'\u00b1')+Math.abs(n)+' min';};
+        const _rep=function(hhmm,ec,dep){
+          const mn=_mnP(hhmm);if(mn===null)return '';
+          const t=_teinte(ec);
+          return '<div style="position:absolute;left:'+_px(mn)+'px;top:9px;height:38px;width:2px;margin-left:-1px;background:'+t.c+';border-radius:2px;z-index:3;pointer-events:none"></div>'
+            +'<div style="position:absolute;left:'+_px(mn)+'px;top:'+(dep?46:0)+'px;transform:translateX(-50%);font-size:'+(_isPhone?9:10)+'px;font-weight:800;line-height:12px;padding:0 4px;border:1px solid '+t.bd+';background:'+t.bg+';color:'+t.c+';border-radius:6px;white-space:nowrap;z-index:4;pointer-events:none">'+_hm(hhmm)+'</div>';
+        };
+        const _ecA=_ecart(pt.debut,ctH.debut),_ecD=pt.fin?_ecart(pt.fin,ctH.fin):null;
+        rowsHtml+=_rep(pt.debut,_ecA,false)+(pt.fin?_rep(pt.fin,_ecD,true):'');
+        _ecTxt=(_ecA!==null?' \u00b7 arriv\u00e9e '+_signe(_ecA)+' vs contrat':'')+(_ecD!==null?' \u00b7 d\u00e9part '+_signe(_ecD)+' vs contrat':'');
+      }
       segments.forEach(seg=>{
         const left=seg.start*COL_W;const width=(seg.end-seg.start)*COL_W-2;
         // Horaires écrits dans la barre seulement si elle est assez large (sinon ils se chevauchent).
         const _lbl=(seg.lbl&&width>=110)?'<span>'+seg.lbl[0]+'</span><span style="font-weight:400;opacity:.85">'+seg.lbl[1]+'</span>':(pointe?'<i class="ti ti-device-tablet" style="font-size:13px"></i>':'');
-        const _tip=pointeReel?'Pointé : '+escHtml(pt.debut||'')+(pt.fin?'–'+escHtml(pt.fin):' (en cours)'):(seg.lbl?escHtml(seg.lbl[0]+' – '+seg.lbl[1]):'');
+        const _tip=pointeReel?'Pointé : '+escHtml(pt.debut||'')+(pt.fin?'–'+escHtml(pt.fin):' (en cours)')+_ecTxt:(seg.lbl?escHtml(seg.lbl[0]+' – '+seg.lbl[1]):'');
         _tips.push(_tip);
-        rowsHtml+='<div \u0001T'+e.id+'|'+(_tips.length-1)+'\u0001 style="position:absolute;left:'+left+'px;width:'+width+'px;top:6px;height:32px;box-sizing:border-box;background-color:'+seg.soft.bg+';border:1px solid '+seg.soft.bd+';border-color:'+seg.soft.bd+'\u0001S'+e.id+'|'+seg.soft.tx+'\u0001;color:'+seg.soft.tx+';border-radius:9px;display:flex;align-items:center;justify-content:space-between;padding:0 9px;font-size:11px;font-weight:600;white-space:nowrap;overflow:hidden'+(seg.ouvert?';border-right:2px dashed '+seg.soft.tx:'')+'">'+_lbl+'</div>';
+        rowsHtml+='<div \u0001T'+e.id+'|'+(_tips.length-1)+'\u0001 style="position:absolute;left:'+left+'px;width:'+width+'px;top:12px;height:32px;box-sizing:border-box;background-color:'+seg.soft.bg+';border:1px solid '+seg.soft.bd+';border-color:'+seg.soft.bd+'\u0001S'+e.id+'|'+seg.soft.tx+'\u0001;color:'+seg.soft.tx+';border-radius:9px;display:flex;align-items:center;justify-content:space-between;padding:0 9px;font-size:11px;font-weight:600;white-space:nowrap;overflow:hidden'+(seg.ouvert?';border-right:2px dashed '+seg.soft.tx:'')+'">'+_lbl+'</div>';
       });
+    }
+    // Jour courant : trait rouge à l'heure actuelle (qui est encore là ?)
+    if(dateStr===todayStr()){
+      const _nm=new Date(),_mnN=(_nm.getHours()-H_START)*60+_nm.getMinutes();
+      if(_mnN>=0&&_mnN<=(H_END-H_START)*60)rowsHtml+='<div title="Maintenant" style="position:absolute;left:'+Math.round(_mnN/30*COL_W)+'px;top:0;bottom:0;border-left:2px solid #c62828;opacity:.5;pointer-events:none;z-index:1"></div>';
     }
     rowsHtml+='</div>';
     rowsHtml+='<div style="width:'+DUR_W+'px;flex-shrink:0;text-align:right;padding-right:8px;font-size:12px;font-variant-numeric:tabular-nums;line-height:1.25">'+prCelluleGantt(rr,e.id,dateStr)+'</div>';
@@ -1185,6 +1214,11 @@ async function renderPresenceGantt(){
       rowsHtml+='<div title="'+tip+'" style="width:'+(COL_W/2)+'px;flex-shrink:0;box-sizing:border-box;text-align:center;overflow:hidden;white-space:nowrap;letter-spacing:-.4px;font-size:'+(COL_W<24?8:9)+'px;font-weight:700;line-height:24px;color:'+col+';background:'+bg+'">'+txt+'</div>';
     });
     rowsHtml+='</div><div style="width:'+DUR_W+'px;flex-shrink:0"></div></div>';
+    // Équipe : prévu du planning contre pointé (29-pointe-vs-prevu.js)
+    if(typeof ptpGanttEquipe==='function'){
+      try{rowsHtml+=await ptpGanttEquipe({crecheId:crecheId,dateStr:dateStr,rows:_pros.filter(function(r){return r.jour===jourSem-1;}),occ:occ,H_START:H_START,COLS:COLS,COL_W:COL_W,NAME_W:NAME_W,DUR_W:DUR_W,isPhone:_isPhone});}
+      catch(err){console.warn('[Gantt] équipe',err);}
+    }
   }
   // Ligne de d\u00e9marcation 12h (l\u00e9gende)
   let legendHtml='<div style="display:flex;align-items:center;gap:16px;margin-top:10px;font-size:11px;color:var(--muted);flex-wrap:wrap">';

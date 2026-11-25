@@ -196,6 +196,12 @@ const PR_LIBELLES={pointe:'Pointé',en_cours:'Présent (en cours)',depart_manqua
   absence_carence:'Absence justifiée (carence)',absence_deduite:'Absence justifiée',ferie:'Jour férié ou fermeture',attente:'En attente de pointage'};
 
 /* Cellule « Durée réelle » du Gantt jour. */
+/* Écart entre la durée pointée et celle du contrat : vert ≤ 10 min, orange jusqu'à 30 min, rouge au-delà. */
+function prEcartContrat(d){
+  const m=Math.round(d),a=Math.abs(m);
+  const col=a>30?'#c62828':a>10?'#c95f0a':'#1f5c42';
+  return ' · <b style="color:'+col+';font-weight:700">'+(m>0?'+':m<0?'\u2212':'\u00b1')+a+' min</b>';
+}
 function prCelluleGantt(r,enfantId,dateStr){
   const fo=prForfait();
   const pillO=function(t){return '<span style="display:inline-block;font-size:10.5px;font-weight:600;padding:1px 7px;border-radius:999px;background:#fbd9bd;color:#7a3d0c;white-space:nowrap">'+t+'</span>';};
@@ -205,7 +211,7 @@ function prCelluleGantt(r,enfantId,dateStr){
   const lien='<a href="#" onclick="prOuvrirAbsence(\''+enfantId+'\',\''+dateStr+'\''+(ab?',\''+ab.id+'\'':'')+');return false;" style="font-size:10.5px;color:var(--koala);font-weight:600">'+(ab?'Modifier le motif':'Motif d’absence')+'</a>';
   const sub=function(t){return '<div style="font-size:10.5px;color:var(--muted);font-weight:400">'+t+'</div>';};
   const motif=ab&&ab.motif?'<div title="'+escHtml(ab.motif)+'" style="font-size:10.5px;color:#7a3d0c;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%">'+escHtml(ab.motif)+'</div>':'';
-  if(r.statut==='pointe')return '<b>'+prFmtDuree(r.minutes)+'</b>'+(r.correctionId?sub('départ corrigé · '+prLienSuppr(r.correctionId)):(r.contratMin!=null?sub('contrat '+prFmtDuree(r.contratMin)):''));
+  if(r.statut==='pointe')return '<b>'+prFmtDuree(r.minutes)+'</b>'+(r.correctionId?sub('départ corrigé · '+prLienSuppr(r.correctionId)):(r.contratMin!=null?sub('contrat '+prFmtDuree(r.contratMin)+prEcartContrat(r.minutes-r.contratMin)):''));
   if(r.statut==='en_cours')return '<b>'+prFmtDuree(r.minutes)+'</b>'+sub('en cours');
   if(r.statut==='attente')return sub('en attente');
   if(r.statut==='ferie')return sub('férié ou fermé');
