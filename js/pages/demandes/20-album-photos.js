@@ -246,7 +246,7 @@ async function albSupprimerPhotos(ids) {
 }
 
 /* --- Album d'un enfant --- */
-function albOuvrirEnfant(id) { ALB.enfant = id; ALB.vue = 'enfant'; ALB.zipPret = false; ALB.remis = false; albRender(); }
+function albOuvrirEnfant(id) { ALB.enfant = id; ALB.vue = 'enfant'; ALB.zipPret = false; ALB.remis = false; ALB.couvId = null; albRender(); }
 async function albRenderEnfant(z) {
   var e = cacheEnfants.find(function (x) { return String(x.id) === String(ALB.enfant); });
   if (!e) { albVue('enfants'); return; }
@@ -256,7 +256,7 @@ async function albRenderEnfant(z) {
     '<b style="font-size:16px;color:var(--koala)">Album de ' + albEsc(albNom(e)) + '</b><span class="alb-ct">' + ph.length + ' photo' + (ph.length > 1 ? 's' : '') + '</span>' +
     '<span style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap">' +
     '<button class="btn-sm" style="background:var(--koala);color:#fff;border-color:var(--koala)" onclick="albChoisir()"><i class="ti ti-photo-plus"></i> Ajouter des photos</button>' +
-    '<button class="btn-sm" ' + (ph.length ? '' : 'disabled') + ' onclick="albLivre()"><i class="ti ti-book"></i> Livre PDF</button>' +
+    '<button class="btn-sm" ' + (ph.length ? '' : 'disabled') + ' onclick="albPanneauLivre()"><i class="ti ti-book"></i> Livre PDF</button>' +
     '<button class="btn-sm" ' + (ph.length ? '' : 'disabled') + ' onclick="albZip(false)"><i class="ti ti-file-zip"></i> Télécharger (.zip)</button>' +
     '<button class="btn-sm" onclick="albPanneauRemise()"><i class="ti ti-gift"></i> Départ : remise aux parents</button></span></div>' +
     '<div id="alb-remise"></div><div id="alb-droit"></div>';

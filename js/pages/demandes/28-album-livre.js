@@ -116,7 +116,8 @@ async function albConstruireLivre(e, ph, blobs) {
     page++;
     doc.setFillColor(61, 53, 128); doc.rect(0, 0, 210, 297, 'F');
     doc.setFillColor(244, 121, 32); doc.rect(0, 252, 210, 45, 'F');
-    var seule = dispo.find(function (p) { return albEnfantsDe(p.id).length === 1; }) || dispo[0];
+    var seule = dispo.find(function (p) { return String(p.id) === String(ALB.couvId); }) ||
+      dispo.find(function (p) { return albEnfantsDe(p.id).length === 1; }) || dispo[0];
     if (seule) {
       try { doc.addImage(await albRecadrer(blobs[seule.id], 100, 100, ''), 'JPEG', 55, 62, 100, 100); } catch (err) { console.warn('[albLivre couverture]', err); }
     }
@@ -204,10 +205,53 @@ function albTelecharger(blob, nom) {
   setTimeout(function () { URL.revokeObjectURL(a.href); }, 60000);
 }
 
-/* Cases à cocher du panneau « Départ : remise aux parents ». */
-function albOptionsHtml() {
+/* Options du livre : cases à cocher + photo de couverture (panneau de remise et panneau « Livre PDF »). */
+function albOptionsHtml() { return '<div id="alb-livre-opt">' + albOptionsInterieur() + '</div>'; }
+function albOptionsInterieur() {
   var o = albOptions();
   function c(cle, txt) { return '<label style="display:flex;gap:6px;align-items:center;font-size:12px"><input type="checkbox" ' + (o[cle] ? 'checked' : '') + ' onchange="albOptSet(\'' + cle + '\',this.checked)"> ' + txt + '</label>'; }
+  var cp = ALB.couvId ? ALB.photos.find(function (p) { return String(p.id) === String(ALB.couvId); }) : null;
+  var vignette = cp ? '<span class="alb-couv-v">' + albImg(cp, true) + '</span>' : '';
   return '<div style="background:var(--koala-light);border-radius:8px;padding:8px 10px;margin-bottom:10px"><div style="font-weight:700;font-size:12px;margin-bottom:4px">Livre de souvenirs (mois par mois)</div>' +
-    '<div style="display:flex;gap:4px 14px;flex-wrap:wrap">' + c('livre', 'Joindre le livre PDF au .zip') + c('couv', 'Couverture') + c('date', 'Date sur chaque photo') + c('fin', 'Page de fin') + '</div></div>';
+    '<div style="display:flex;gap:4px 14px;flex-wrap:wrap">' + c('livre', 'Joindre le livre PDF au .zip') + c('couv', 'Couverture') + c('date', 'Date sur chaque photo') + c('fin', 'Page de fin') + '</div>' +
+    '<div style="display:flex;align-items:center;gap:8px;margin-top:8px;font-size:12px">' + vignette +
+    '<span>Photo de couverture : <b>' + (cp ? 'choisie' : 'automatique (photo de l’enfant seul·e)') + '</b></span>' +
+    '<button class="btn-sm" type="button" onclick="albCouvChoisir()"><i class="ti ti-photo-star"></i> Choisir la photo</button></div></div>';
+}
+function albOptionsRafraichir() { var z = albById('alb-livre-opt'); if (z) z.innerHTML = albOptionsInterieur(); }
+
+/* Panneau du bouton « Livre PDF » : options, choix de la couverture, téléchargement. */
+function albPanneauLivre() {
+  var z = albById('alb-remise');
+  if (!z) return;
+  z.innerHTML = '<div class="alb-remise"><div style="font-weight:700;margin-bottom:8px">Livre de souvenirs</div>' + albOptionsHtml() +
+    '<button class="btn-primary" onclick="albLivre()"><i class="ti ti-book-download"></i> Télécharger le livre PDF</button></div>';
+}
+
+/* Choix de la photo de couverture parmi les photos de l'enfant. */
+async function albCouvChoisir() {
+  var ph = albPhotosDe(ALB.enfant);
+  if (!ph.length) return;
+  await albUrls(ph.map(function (p) { return p.chemin_mini; }));
+  var m = albById('alb-couv-modal');
+  if (m) m.remove();
+  m = document.createElement('div'); m.id = 'alb-couv-modal';
+  m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px';
+  m.onclick = function (ev) { if (ev.target === m) m.remove(); };
+  var tri = ph.slice().sort(function (a, b) { return String(a.prise_le).localeCompare(String(b.prise_le)); });
+  m.innerHTML = '<div style="background:#fff;border-radius:14px;max-width:760px;width:100%;max-height:88vh;display:flex;flex-direction:column;padding:14px">' +
+    '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px"><b style="font-size:15px;color:var(--koala)">Photo de couverture</b>' +
+    '<button class="btn-sm" style="margin-left:auto" onclick="albCouvPoser(null)">Automatique</button>' +
+    '<button class="btn-sm" onclick="albById(\'alb-couv-modal\').remove()"><i class="ti ti-x"></i></button></div>' +
+    '<div class="alb-gal" style="overflow:auto">' + tri.map(function (p) {
+      var cur = String(p.id) === String(ALB.couvId);
+      return '<div class="alb-ph" style="' + (cur ? 'outline:3px solid var(--orange)' : '') + '" onclick="albCouvPoser(\'' + p.id + '\')" role="button" tabindex="0">' + albImg(p, true) +
+        '<span class="alb-tag">' + albDateFr(p.prise_le) + '</span></div>';
+    }).join('') + '</div></div>';
+  document.body.appendChild(m);
+}
+function albCouvPoser(id) {
+  ALB.couvId = id;
+  var m = albById('alb-couv-modal'); if (m) m.remove();
+  albOptionsRafraichir();
 }
