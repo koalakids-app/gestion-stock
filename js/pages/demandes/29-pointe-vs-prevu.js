@@ -194,6 +194,9 @@ async function ptpGanttEquipe(o){
   }
   const parCle={};
   pts.forEach(p=>{const k=p.employe_id?'e:'+p.employe_id:'s:'+p.salarie_id;(parCle[k]=parCle[k]||[]).push(p);});
+  // Aucun pointage d'équipe ce jour-là (l'équipe ne pointe pas, ou pas encore) : on n'affiche que le prévu,
+  // sans « non pointé » ni « ! » qui seraient de fausses alertes.
+  const sansPointage=!futur&&pts.length===0;
 
   const lab=m=>Math.floor(m/60)+'h'+(m%60?String(m%60).padStart(2,'0'):'');
   const px=m=>Math.max(0,Math.min(COLS*COL_W,Math.round((m-H_START*60)/30*COL_W)));
@@ -255,7 +258,7 @@ async function ptpGanttEquipe(o){
       pv.forEach(s=>{inner+='<div style="position:absolute;left:'+px(s[0])+'px;width:'+(px(s[1])-px(s[0]))+'px;top:34px;height:7px;border-radius:4px;background:#e8e6ef;border:1px solid #d3d0e0;box-sizing:border-box"></div>';});
       const premier=pt[0],dernier=pt[pt.length-1];
       if(!pt.length){
-        const du=pv.length&&!futur&&(!auj||pv[0][0]<=nowM);
+        const du=pv.length&&!futur&&!sansPointage&&(!auj||pv[0][0]<=nowM);
         if(du){
           const fin=auj?Math.min(nowM,pv[0][1]):pv[0][1];
           inner+='<div style="position:absolute;left:'+px(pv[0][0])+'px;width:'+Math.max(6,px(fin)-px(pv[0][0]))+'px;top:14px;height:22px;box-sizing:border-box;border-radius:7px;background:#fbd9bd;border:1px solid #f3bb8f;color:#7a3d0c;font-size:10.5px;font-weight:700;display:flex;align-items:center;padding:0 7px;white-space:nowrap;overflow:hidden">'+(px(fin)-px(pv[0][0])>120?'Non pointé':'')+'</div>';
@@ -319,8 +322,8 @@ async function ptpGanttEquipe(o){
   let echelle='<div style="display:flex;align-items:center;border-bottom:1px solid #e0dff0;margin-bottom:2px"><div style="position:sticky;left:0;z-index:3;background:#fff;width:'+(NAME_W+30)+'px;flex-shrink:0;height:16px"></div>';
   for(let h=H_START;h<H_START+COLS/2;h++)echelle+='<div style="width:'+(COL_W*2)+'px;flex-shrink:0;font-size:10px;font-weight:600;color:var(--muted);text-align:left;border-left:1px solid #e0dff0;padding-left:2px">'+h+'h</div>';
   echelle+='<div style="width:'+DUR_W+'px;flex-shrink:0;font-size:10px;font-weight:600;color:var(--muted);text-align:right;padding-right:8px">Pointé / prévu</div></div>';
-  let html='<div style="display:flex;align-items:center;border-top:2px solid var(--koala);margin-top:6px;padding:6px 0 2px"><div style="font-size:12px;font-weight:800;color:var(--koala)">Équipe — pointé / prévu</div></div>'+echelle+pieces.join('');
-  if(!futur){
+  let html='<div style="display:flex;align-items:center;border-top:2px solid var(--koala);margin-top:6px;padding:6px 0 2px"><div style="font-size:12px;font-weight:800;color:var(--koala)">Équipe — pointé / prévu</div>'+(sansPointage?'<div style="margin-left:12px;font-size:11px;color:var(--muted)">Aucun pointage d\u2019équipe ce jour : seul le prévu est affiché.</div>':'')+'</div>'+echelle+pieces.join('');
+  if(!futur&&!sansPointage){
     let c1='',c2='';
     for(let q=0;q<nQ;q++){
       const n=ptQ[q],pvn=prevQ[q];
