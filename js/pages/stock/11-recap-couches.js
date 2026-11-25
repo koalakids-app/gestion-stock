@@ -10,15 +10,14 @@ function recapMoisLabel(iso) {
   const l = d.toLocaleDateString('fr-FR', { month: 'short', year: '2-digit' });
   return l.replace('.', '');
 }
-// Le récapitulatif démarre en novembre 2026 : les mois antérieurs ne sont ni affichés ni comptés.
+// Le récapitulatif démarre en novembre 2026 : 12 colonnes à partir de ce mois (les mois à venir restent vides),
+// les mois antérieurs ne sont ni affichés ni comptés.
 const RECAP_DEBUT = '2026-11-01';
 function recapMoisListe(n) {
-  const out = [], d = new Date(); d.setDate(1);
+  const out = [], d = new Date(RECAP_DEBUT + 'T00:00:00');
   for (let i = 0; i < n; i++) {
-    const m = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-01';
-    if (m < RECAP_DEBUT) break;
-    out.unshift(m);
-    d.setMonth(d.getMonth() - 1);
+    out.push(d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-01');
+    d.setMonth(d.getMonth() + 1);
   }
   return out;
 }
@@ -65,7 +64,7 @@ function renderCouchesRecap() {
       <span style="font-size:12.5px;color:var(--ink3);font-weight:700">📊 Consommation de couches par mois</span>
       <button class="btn btn-sm btn-secondary" style="margin-left:auto" onclick="coucheRecapCsv()">⬇️ CSV</button>
     </div>
-    <div style="font-size:11.5px;color:var(--ink3);margin-bottom:8px">D'après les saisies « Couches du jour » depuis novembre 2026.</div>`;
+    <div style="font-size:11.5px;color:var(--ink3);margin-bottom:8px">D'après les saisies « Couches du jour » de novembre 2026 à octobre 2027.</div>`;
   if (!lignes.length) html += `<div style="font-size:12.5px;color:var(--ink3)">Aucune consommation saisie sur la période.</div>`;
 
   // 1) Total par mois, une table par crèche
