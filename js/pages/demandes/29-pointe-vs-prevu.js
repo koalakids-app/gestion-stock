@@ -250,18 +250,27 @@ async function ptpGanttEquipe(o){
     if(abs&&!pv.length){
       const mot=PE_ABS_MOTIFS[abs.absence_motif||(abs.type==='conge'?'conge':'autre')];
       const sg=peRowSegs(abs);
-      if(sg)sg.forEach(s=>{inner+='<div style="position:absolute;left:'+px(s[0])+'px;width:'+(px(s[1])-px(s[0]))+'px;top:14px;height:28px;box-sizing:border-box;border:1px dashed #d3d0e0;border-radius:9px;background:repeating-linear-gradient(135deg,#ece9f5 0 6px,transparent 6px 12px);color:var(--muted);font-size:11px;font-weight:600;display:flex;align-items:center;padding:0 9px;white-space:nowrap;overflow:hidden">'+escHtml(mot)+'</div>';});
+      if(sg)sg.forEach(s=>{inner+='<div style="position:absolute;left:'+px(s[0])+'px;width:'+(px(s[1])-px(s[0]))+'px;top:12px;height:32px;box-sizing:border-box;border:1px dashed #d3d0e0;border-radius:9px;background:repeating-linear-gradient(135deg,#ece9f5 0 6px,transparent 6px 12px);color:var(--muted);font-size:11px;font-weight:600;display:flex;align-items:center;padding:0 9px;white-space:nowrap;overflow:hidden">'+escHtml(mot)+'</div>';});
       tot='—';sub='absent·e';tip+=' — '+mot;
       if(pt.length){inner+=pt.map(s=>'<div style="position:absolute;left:'+px(s[0])+'px;width:'+Math.max(4,px(s[1])-px(s[0]))+'px;top:12px;height:32px;border-radius:9px;background:#fdecea;border:1px solid #c62828"></div>').join('');sub='pointé·e alors qu’absent·e';subCol='#c62828';}
     }else{
-      // Prévu : barre fine sous la barre pointée
-      pv.forEach(s=>{inner+='<div style="position:absolute;left:'+px(s[0])+'px;width:'+(px(s[1])-px(s[0]))+'px;top:34px;height:7px;border-radius:4px;background:#e8e6ef;border:1px solid #d3d0e0;box-sizing:border-box"></div>';});
+      const du=pv.length&&!futur&&!sansPointage&&(!auj||pv[0][0]<=nowM);
+      if(pt.length||du){
+        // Un pointé (ou un « non pointé ») occupe la barre principale : le prévu reste en fine barre dessous
+        pv.forEach(s=>{inner+='<div style="position:absolute;left:'+px(s[0])+'px;width:'+(px(s[1])-px(s[0]))+'px;top:40px;height:7px;border-radius:4px;background:#e8e6ef;border:1px solid #d3d0e0;box-sizing:border-box"></div>';});
+      }else{
+        // Rien de pointé : le prévu est la barre principale, à la taille de celles des enfants, horaires dedans
+        pv.forEach(s=>{
+          const w=Math.max(4,px(s[1])-px(s[0])-2);
+          const txt=w>=110?'<span>'+lab(s[0])+'</span><span style="font-weight:400;opacity:.85">'+lab(s[1])+'</span>':'';
+          inner+='<div title="Prévu '+lab(s[0])+' \u2192 '+lab(s[1])+'" style="position:absolute;left:'+px(s[0])+'px;width:'+w+'px;top:12px;height:32px;box-sizing:border-box;border-radius:9px;background:#e8e6ef;border:1px solid #d3d0e0;color:#6b6785;font-size:11px;font-weight:600;display:flex;align-items:center;justify-content:space-between;padding:0 9px;white-space:nowrap;overflow:hidden">'+txt+'</div>';
+        });
+      }
       const premier=pt[0],dernier=pt[pt.length-1];
       if(!pt.length){
-        const du=pv.length&&!futur&&!sansPointage&&(!auj||pv[0][0]<=nowM);
         if(du){
           const fin=auj?Math.min(nowM,pv[0][1]):pv[0][1];
-          inner+='<div style="position:absolute;left:'+px(pv[0][0])+'px;width:'+Math.max(6,px(fin)-px(pv[0][0]))+'px;top:14px;height:22px;box-sizing:border-box;border-radius:7px;background:#fbd9bd;border:1px solid #f3bb8f;color:#7a3d0c;font-size:10.5px;font-weight:700;display:flex;align-items:center;padding:0 7px;white-space:nowrap;overflow:hidden">'+(px(fin)-px(pv[0][0])>120?'Non pointé':'')+'</div>';
+          inner+='<div style="position:absolute;left:'+px(pv[0][0])+'px;width:'+Math.max(6,px(fin)-px(pv[0][0]))+'px;top:12px;height:32px;box-sizing:border-box;border-radius:9px;background:#fbd9bd;border:1px solid #f3bb8f;color:#7a3d0c;font-size:10.5px;font-weight:700;display:flex;align-items:center;padding:0 7px;white-space:nowrap;overflow:hidden">'+(px(fin)-px(pv[0][0])>120?'Non pointé':'')+'</div>';
           tot='0h';sub='attendu·e depuis '+lab(pv[0][0]);subCol='#c62828';tip+=' — aucune arrivée pointée';
         }else{tot=futur||pv.length?'':'—';sub=pv.length?'prévu '+peFmtDuree(pvTot):'—';}
       }else{
@@ -269,13 +278,13 @@ async function ptpGanttEquipe(o){
           const oubli=s[2]==='oubli',cours=s[2]==='cours';
           const w=Math.max(4,px(s[1])-px(s[0])-2);
           const txt=w>=110?lab(s[0])+(cours?' · en cours':oubli?' · départ oublié':' – '+lab(s[1])):'';
-          inner+='<div style="position:absolute;left:'+px(s[0])+'px;width:'+w+'px;top:14px;height:22px;box-sizing:border-box;border-radius:7px;background:'+(oubli?'#fbd9bd':'#c5ead6')+';border:1px solid '+(oubli?'#f3bb8f':'#9fd6bb')+';color:'+(oubli?'#7a3d0c':'#1f5c42')+';font-size:10.5px;font-weight:700;display:flex;align-items:center;padding:0 7px;white-space:nowrap;overflow:hidden'+(cours?';border-right:2px dashed #1f5c42':'')+'">'+txt+'</div>';
+          inner+='<div style="position:absolute;left:'+px(s[0])+'px;width:'+w+'px;top:12px;height:32px;box-sizing:border-box;border-radius:9px;background:'+(oubli?'#fbd9bd':'#c5ead6')+';border:1px solid '+(oubli?'#f3bb8f':'#9fd6bb')+';color:'+(oubli?'#7a3d0c':'#1f5c42')+';font-size:10.5px;font-weight:700;display:flex;align-items:center;padding:0 7px;white-space:nowrap;overflow:hidden'+(cours?';border-right:2px dashed #1f5c42':'')+'">'+txt+'</div>';
         });
         // Repères : première arrivée (au-dessus), départ final (en dessous)
         const rep=(m,ec,dep)=>{
           const t=teinte(ec);
-          return '<div style="position:absolute;left:'+px(m)+'px;top:10px;height:34px;width:2px;margin-left:-1px;background:'+t.c+';border-radius:2px;z-index:3;pointer-events:none"></div>'
-            +'<div style="position:absolute;left:'+px(m)+'px;top:'+(dep?44:0)+'px;transform:translateX(-50%);font-size:'+(isPhone?9:10)+'px;font-weight:800;line-height:12px;padding:0 4px;border:1px solid '+t.bd+';background:'+t.bg+';color:'+t.c+';border-radius:6px;white-space:nowrap;z-index:4;pointer-events:none">'+lab(m)+'</div>';
+          return '<div style="position:absolute;left:'+px(m)+'px;top:9px;height:40px;width:2px;margin-left:-1px;background:'+t.c+';border-radius:2px;z-index:3;pointer-events:none"></div>'
+            +'<div style="position:absolute;left:'+px(m)+'px;top:'+(dep?47:0)+'px;transform:translateX(-50%);font-size:'+(isPhone?9:10)+'px;font-weight:800;line-height:12px;padding:0 4px;border:1px solid '+t.bd+';background:'+t.bg+';color:'+t.c+';border-radius:6px;white-space:nowrap;z-index:4;pointer-events:none">'+lab(m)+'</div>';
         };
         const ecA=pv.length?premier[0]-pv[0][0]:null;
         inner+=rep(premier[0],ecA,false);
@@ -307,7 +316,7 @@ async function ptpGanttEquipe(o){
     const horaire=pv.length?lab(pv[0][0])+' – '+lab(pv[pv.length-1][1]):'';
     pieces.push('<div style="display:flex;align-items:center;padding:3px 0;border-top:1px solid #f0eef8">'
       +'<div style="position:sticky;left:0;z-index:2;background:#fff;width:'+(NAME_W+30)+'px;flex-shrink:0;padding-right:8px;text-align:right;box-sizing:border-box;line-height:1.25"><div style="font-size:12px;font-weight:700;color:#0F6B5E;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+escHtml(prenom)+'</div>'+(pill?'<div>'+pill+'</div>':'')+(horaire?'<div style="font-size:10.5px;color:var(--muted)">'+horaire+'</div>':'')+'</div>'
-      +'<div title="'+escHtml(tip)+'" style="position:relative;width:'+(COLS*COL_W)+'px;flex-shrink:0;height:56px;border-left:1px solid #e0dff0">'+inner+'</div>'
+      +'<div title="'+escHtml(tip)+'" style="position:relative;width:'+(COLS*COL_W)+'px;flex-shrink:0;height:60px;border-left:1px solid #e0dff0">'+inner+'</div>'
       +'<div style="width:'+DUR_W+'px;flex-shrink:0;text-align:right;padding-right:8px;font-size:12px;font-variant-numeric:tabular-nums;line-height:1.25"><b>'+tot+'</b><div style="font-size:10.5px;font-weight:600;color:'+subCol+'">'+sub+'</div></div></div>');
   });
 
