@@ -243,11 +243,12 @@ async function albCouvChoisir() {
     '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px"><b style="font-size:15px;color:var(--koala)">Photo de couverture</b>' +
     '<button class="btn-sm" style="margin-left:auto" onclick="albCouvPoser(null)">Automatique</button>' +
     '<button class="btn-sm" onclick="albById(\'alb-couv-modal\').remove()"><i class="ti ti-x"></i></button></div>' +
-    '<div class="alb-gal" style="overflow:auto">' + tri.map(function (p) {
+    '<div style="flex:1 1 auto;min-height:0;overflow-y:auto;padding:4px"><div class="alb-gal" style="align-content:start">' + tri.map(function (p) {
       var cur = String(p.id) === String(ALB.couvId);
-      return '<div class="alb-ph" style="' + (cur ? 'outline:3px solid var(--orange)' : '') + '" onclick="albCouvPoser(\'' + p.id + '\')" role="button" tabindex="0">' + albImg(p, true) +
+      return '<div class="alb-ph" style="' + (cur ? 'box-shadow:0 0 0 3px var(--orange)' : '') + '" onclick="albCouvPoser(\'' + p.id + '\')" role="button" tabindex="0">' + albImg(p, true) +
+        (cur ? '<span style="position:absolute;right:5px;top:5px;background:var(--orange);color:#fff;border-radius:99px;font-size:11px;font-weight:700;padding:1px 7px">Couverture</span>' : '') +
         '<span class="alb-tag">' + albDateFr(p.prise_le) + '</span></div>';
-    }).join('') + '</div></div>';
+    }).join('') + '</div></div></div>';
   document.body.appendChild(m);
 }
 function albCouvPoser(id) {
