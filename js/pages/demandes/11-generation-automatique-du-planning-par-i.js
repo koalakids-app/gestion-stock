@@ -189,6 +189,8 @@ async function renderPlanningEquipe(){
     if(dwBtn0)dwBtn0.style.display='none';
     if(iaBtn0)iaBtn0.style.display='none';
     if(rsBtn0)rsBtn0.style.display='none';
+    const ptpBtn0=document.getElementById('pe-ptp-btn');if(ptpBtn0)ptpBtn0.style.display='none';
+    if(typeof ptpRendre==='function')ptpRendre();
     return;
   }
 
@@ -210,6 +212,7 @@ async function renderPlanningEquipe(){
   if(dwBtn)dwBtn.style.display=(editable&&rows.length)?'':'none';
   if(iaBtn)iaBtn.style.display=editable?'':'none';
   if(rsBtn)rsBtn.style.display=(editable&&rows.length)?'':'none';
+  const ptpBtn=document.getElementById('pe-ptp-btn');if(ptpBtn)ptpBtn.style.display=editable?'':'none';
   peRenderRefNomRow(crecheId,editable);
   const _peFermBanner=(function(){
     const jrs=Array.from({length:5},(_,i)=>{const d=new Date(ws);d.setDate(ws.getDate()+i);return d;})
@@ -220,6 +223,7 @@ async function renderPlanningEquipe(){
     return '<div class="warn" style="background:var(--red-l,#FDE8E8);color:var(--red,#C62828);border-radius:12px;padding:9px 13px;font-size:12.5px;font-weight:700;margin-bottom:10px;display:flex;align-items:center;gap:7px"><i class="ti ti-door-off"></i> Crèche fermée cette semaine — '+escHtml(uniq.join(', '))+'</div>';
   })();
   wrap.innerHTML=_peFermBanner+getPlanningEquipeTable(rows,semaine,crecheName,crecheId,editable);
+  if(typeof ptpRendre==='function')ptpRendre();
 
   const info=document.getElementById('pe-import-info');
   if(info){
