@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Maquette — Album de départ (mois par mois)</title>
+<style>
+:root{--koala:#3D3580;--koala-dark:#2A2460;--koala-light:#EEEDF8;--orange:#F47920;--orange-light:#FEF0E6;--border:#e0dff0;--bg:#F4F4F6;--muted:#777}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:#1a1a1a}
+.bandeau{background:#fff;border-bottom:4px solid var(--koala);padding:12px 20px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.bandeau h1{font-size:18px;color:var(--koala)}
+.bandeau small{color:var(--muted)}
+.maq{margin-left:auto;font-size:12px;background:var(--orange-light);color:var(--orange);padding:4px 10px;border-radius:20px;font-weight:700}
+.layout{display:grid;grid-template-columns:320px 1fr;gap:18px;max-width:1240px;margin:0 auto;padding:18px}
+@media(max-width:900px){.layout{grid-template-columns:1fr}}
+.panneau{background:#fff;border:1px solid var(--border);border-radius:14px;padding:16px;align-self:start;position:sticky;top:12px}
+.panneau h2{font-size:15px;color:var(--koala);margin-bottom:10px}
+.panneau h3{font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin:14px 0 6px}
+.panneau label{display:flex;gap:8px;align-items:flex-start;font-size:13px;margin:6px 0;cursor:pointer}
+.panneau select,.panneau input[type=text]{width:100%;padding:7px 9px;border:1px solid var(--border);border-radius:8px;font-size:13px}
+.btn{display:block;width:100%;margin-top:8px;padding:10px;border:none;border-radius:10px;font-weight:700;font-size:13px;cursor:pointer;background:var(--koala);color:#fff}
+.btn.sec{background:#fff;color:var(--koala);border:1.5px solid var(--koala)}
+.etapes{font-size:12px;color:var(--muted);margin-top:12px;line-height:1.5}
+.chrono{display:flex;gap:3px;margin:6px 0 2px;align-items:flex-end;height:46px}
+.chrono a{flex:1;background:var(--koala-light);border-radius:3px 3px 0 0;min-height:4px;cursor:pointer;transition:background .15s}
+.chrono a:hover{background:var(--orange)}
+.chrono-l{display:flex;justify-content:space-between;font-size:10px;color:var(--muted)}
+.onglets{display:flex;gap:6px;margin-bottom:12px}
+.onglets button{padding:8px 14px;border:1px solid var(--border);background:#fff;border-radius:20px;font-size:13px;font-weight:600;cursor:pointer;color:#444}
+.onglets button.on{background:var(--koala);color:#fff;border-color:var(--koala)}
+/* pages A4 */
+.pages{display:flex;flex-direction:column;gap:22px;align-items:center}
+.page{width:100%;max-width:640px;aspect-ratio:210/297;background:#fff;border-radius:6px;box-shadow:0 3px 14px rgba(42,36,96,.15);padding:9% 8%;display:flex;flex-direction:column;position:relative;overflow:hidden}
+.page .pied{position:absolute;bottom:3.5%;left:8%;right:8%;display:flex;justify-content:space-between;font-size:9px;color:#999}
+.couv{background:linear-gradient(160deg,var(--koala-dark),var(--koala) 55%,var(--orange));color:#fff;justify-content:center;align-items:center;text-align:center}
+.couv .logo{font-size:12px;letter-spacing:.2em;text-transform:uppercase;opacity:.85;margin-bottom:8%}
+.couv .photo-rond{width:42%;aspect-ratio:1;border-radius:50%;border:5px solid #fff;margin:0 auto 7%;overflow:hidden}
+.couv h2{font-size:34px;font-weight:800;line-height:1.1}
+.couv p{margin-top:10px;font-size:15px;opacity:.92}
+.couv .periode{margin-top:6%;font-size:13px;background:#ffffff26;border-radius:20px;padding:6px 16px;display:inline-block}
+.mois-t{display:flex;align-items:baseline;gap:10px;border-bottom:3px solid var(--orange);padding-bottom:6px;margin-bottom:3%}
+.mois-t h2{font-size:24px;color:var(--koala);text-transform:capitalize}
+.mois-t span{font-size:12px;color:var(--muted)}
+.mot{font-size:11px;font-style:italic;color:#555;background:var(--koala-light);border-radius:8px;padding:6px 10px;margin-bottom:3%}
+.grille{flex:1;display:grid;gap:7px;grid-auto-flow:dense;margin-bottom:6%}
+.grille.n1{grid-template-columns:1fr}
+.grille.n2{grid-template-columns:1fr;grid-template-rows:1fr 1fr}
+.grille.n3{grid-template-columns:1fr 1fr;grid-template-rows:1.4fr 1fr}
+.grille.n3 .ph:first-child{grid-column:span 2}
+.grille.n4{grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr}
+.grille.n6{grid-template-columns:1fr 1fr;grid-template-rows:repeat(3,1fr)}
+.ph{border-radius:5px;position:relative;overflow:hidden;min-height:0}
+.ph .d{position:absolute;left:5px;bottom:4px;font-size:9px;color:#fff;background:#0007;border-radius:8px;padding:1px 6px}
+.ph .g{position:absolute;right:5px;top:4px;font-size:9px;color:#fff;background:#f47920cc;border-radius:8px;padding:1px 6px}
+.fin{background:var(--orange-light);justify-content:center;align-items:center;text-align:center}
+.fin h2{font-size:26px;color:var(--koala);margin-bottom:12px}
+.fin p{font-size:13px;color:#555;max-width:78%;line-height:1.5}
+.fin .stats{display:flex;gap:18px;margin:22px 0}
+.fin .stats b{display:block;font-size:26px;color:var(--orange)}
+.fin .stats span{font-size:11px;color:#777}
+/* dossier zip */
+.arbo{background:#fff;border:1px solid var(--border);border-radius:14px;padding:16px 20px;font-family:ui-monospace,Consolas,monospace;font-size:13px;line-height:1.9;max-width:640px;margin:0 auto}
+.arbo .dos{color:var(--koala);font-weight:700}
+.arbo .fic{color:#555;padding-left:22px}
+.arbo .n{color:#999;font-size:11px}
+.note{max-width:640px;margin:10px auto 0;font-size:12px;color:var(--muted);line-height:1.5}
+.cache{display:none}
+@media print{body{background:#fff}.bandeau,.panneau,.onglets,.note{display:none}.layout{display:block;padding:0}.page{box-shadow:none;max-width:none;width:210mm;height:297mm;aspect-ratio:auto;border-radius:0;page-break-after:always}}
+</style>
+</head>
+<body>
+<div class="bandeau">
+  <h1>Album photos › Départ : album de souvenirs</h1>
+  <small>Photos classées par mois, de l’arrivée au départ</small>
+  <span class="maq">MAQUETTE — photos fictives</span>
+</div>
+
+<div class="layout">
+  <aside class="panneau">
+    <h2>Album de départ de Camille</h2>
+    <small style="color:#777">Crèche Koala Kids Ollioules · du 04/09/2023 au 05/07/2026</small>
+
+    <h3>Répartition dans le temps</h3>
+    <div class="chrono" id="chrono"></div>
+    <div class="chrono-l"><span>sept. 2023</span><span>juil. 2026</span></div>
+
+    <h3>Contenu</h3>
+    <label><input type="checkbox" id="o-couv" checked> Page de couverture (photo + prénom)</label>
+    <label><input type="checkbox" id="o-mot" checked> Un petit mot de l’équipe par mois (facultatif)</label>
+    <label><input type="checkbox" id="o-date" checked> Date sur chaque photo</label>
+    <label><input type="checkbox" id="o-fin" checked> Page de fin (chiffres + message)</label>
+
+    <h3>Mois très remplis</h3>
+    <select id="o-max">
+      <option value="6">6 photos par page, mois coupé en plusieurs pages</option>
+      <option value="4">4 photos par page (plus grandes)</option>
+    </select>
+    <h3>Mois sans photo</h3>
+    <select><option>Ne pas afficher le mois</option><option>Afficher « pas de photo ce mois-ci »</option></select>
+
+    <h3>Format</h3>
+    <button class="btn" onclick="window.print()">Imprimer / PDF (A4)</button>
+    <button class="btn sec">Dossier .zip (un dossier par mois)</button>
+
+    <p class="etapes"><b>Parcours :</b> 1. choisir les options · 2. relire l’aperçu · 3. produire le PDF et/ou le .zip · 4. remise confirmée aux parents (comme aujourd’hui) · 5. suppression des photos de Camille.<br><br>
+    Les photos de groupe apparaissent avec la mention « photo de groupe ».</p>
+  </aside>
+
+  <main>
+    <div class="onglets">
+      <button class="on" data-v="livre" onclick="vue('livre')">Aperçu du livre</button>
+      <button data-v="zip" onclick="vue('zip')">Contenu du .zip</button>
+    </div>
+    <div id="v-livre" class="pages"></div>
+    <div id="v-zip" class="cache"></div>
+  </main>
+</div>
+
+<script>
+var MOIS=['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];
+var TEINTES=[['#ffd89b','#f47920'],['#a8c0ff','#3d3580'],['#b5e8c3','#2a9d4e'],['#f6b8c9','#c0407a'],['#cfd9ff','#378add'],['#ffe9a6','#e0a800']];
+/* données fictives : [année, mois(0-11), nb photos, nb photos de groupe, mot] */
+var DATA=[
+ [2023,8,5,2,'Les premiers jours : on découvre la crèche, les copains et la pâte à modeler.'],
+ [2023,9,4,1,''],[2023,10,6,2,'Premières promenades dans le jardin, bottes et feuilles d’automne.'],
+ [2023,11,3,3,'Spectacle de Noël et goûter de fête.'],
+ [2024,0,2,0,''],[2024,1,4,1,''],[2024,2,7,2,'La chasse aux œufs approche, que de découvertes !'],
+ [2024,3,3,0,''],[2024,4,5,1,''],[2024,5,8,3,'Fête de fin d’année : chansons et peinture au programme.'],
+ [2024,6,0,0,''],[2024,8,4,1,''],[2024,9,6,2,''],[2024,10,3,0,''],[2024,11,5,2,'Décorations, sapin et gâteaux à la crèche.'],
+ [2025,0,2,1,''],[2025,1,4,0,''],[2025,2,5,1,''],[2025,5,6,2,''],[2026,5,9,3,'Dernier mois : kermesse et souvenirs avec les copains.'],[2026,6,2,1,'Au revoir et bonne route vers l’école !']
+];
+function tile(i,moisIdx,groupe,date){
+  var t=TEINTES[(i+moisIdx)%TEINTES.length];
+  var ang=(i*47+moisIdx*31)%360;
+  return '<div class="ph" style="background:linear-gradient('+ang+'deg,'+t[0]+','+t[1]+')">'+
+    (groupe?'<span class="g">photo de groupe</span>':'')+
+    (document.getElementById('o-date').checked?'<span class="d">'+date+'</span>':'')+'</div>';
+}
+function pad(n){return (n<10?'0':'')+n}
+function mm(a,m){return a+'-'+pad(m+1)}
+function bati(){
+  var h='',total=0,groupes=0,nbMois=0,max=+document.getElementById('o-max').value;
+  DATA.forEach(function(d){ if(d[2]>0){nbMois++;total+=d[2];groupes+=d[3];} });
+  if(document.getElementById('o-couv').checked){
+    h+='<div class="page couv"><div class="logo">Koala Kids · Ollioules</div>'+
+      '<div class="photo-rond" style="background:linear-gradient(135deg,#ffd89b,#f47920)"></div>'+
+      '<h2>L’album de Camille</h2><p>Trois années de souvenirs, mois après mois</p>'+
+      '<span class="periode">septembre 2023 → juillet 2026</span></div>';
+  }
+  var pageNo=1;
+  DATA.forEach(function(d,k){
+    var a=d[0],m=d[1],n=d[2],g=d[3];
+    if(n===0) return;
+    var parts=[],reste=n,idx=0;
+    while(reste>0){var c=Math.min(reste,max);parts.push(c);reste-=c;}
+    parts.forEach(function(c,p){
+      var cls=c>=5?'n6':(c===4?'n4':'n'+c);
+      var tiles='';
+      for(var i=0;i<c;i++){
+        var jour=1+((idx*5+k*3)%27);
+        tiles+=tile(idx,k,idx<g,pad(jour)+'/'+pad(m+1)+'/'+a);
+        idx++;
+      }
+      pageNo++;
+      h+='<div class="page"><div class="mois-t"><h2>'+MOIS[m]+' '+a+(p>0?' (suite)':'')+'</h2><span>'+n+' photo'+(n>1?'s':'')+'</span></div>'+
+        ((document.getElementById('o-mot').checked&&d[4]&&p===0)?'<div class="mot">« '+d[4]+' »</div>':'')+
+        '<div class="grille '+cls+'">'+tiles+'</div>'+
+        '<div class="pied"><span>Camille</span><span>'+pageNo+'</span></div></div>';
+    });
+  });
+  if(document.getElementById('o-fin').checked){
+    h+='<div class="page fin"><h2>Merci pour ces belles années</h2>'+
+      '<div class="stats"><div><b>'+nbMois+'</b><span>mois racontés</span></div><div><b>'+total+'</b><span>photos</span></div><div><b>'+groupes+'</b><span>avec les copains</span></div></div>'+
+      '<p>Toute l’équipe de la crèche souhaite à Camille et à sa famille une très belle rentrée et plein d’aventures à venir.</p></div>';
+  }
+  document.getElementById('v-livre').innerHTML=h;
+  /* zip */
+  var z='<div class="arbo"><div class="dos">📁 Album-Camille.zip</div>';
+  DATA.forEach(function(d){
+    if(d[2]===0) return;
+    z+='<div class="dos" style="padding-left:14px">📁 '+mm(d[0],d[1])+' '+MOIS[d[1]].charAt(0).toUpperCase()+MOIS[d[1]].slice(1)+' '+d[0]+' <span class="n">('+d[2]+' photos)</span></div>'+
+       '<div class="fic">'+mm(d[0],d[1])+'-01_001.jpg … '+mm(d[0],d[1])+'-'+pad(Math.min(d[2],99))+'.jpg</div>';
+  });
+  z+='<div class="dos" style="padding-left:14px;margin-top:6px">📄 Album-Camille.pdf <span class="n">(version imprimable)</span></div>'+
+     '<div class="dos" style="padding-left:14px">📄 LISEZMOI.txt</div></div>'+
+     '<p class="note">Chaque photo est nommée par sa date de prise de vue : les fichiers restent dans l’ordre chronologique dans n’importe quel explorateur. Le PDF et les dossiers contiennent exactement les mêmes photos.</p>';
+  document.getElementById('v-zip').innerHTML=z;
+}
+function chrono(){
+  var mx=Math.max.apply(null,DATA.map(function(d){return d[2]}));
+  document.getElementById('chrono').innerHTML=DATA.map(function(d){
+    return '<a title="'+MOIS[d[1]]+' '+d[0]+' : '+d[2]+' photos" style="height:'+Math.max(4,d[2]/mx*46)+'px"></a>';
+  }).join('');
+}
+function vue(v){
+  document.getElementById('v-livre').className=v==='livre'?'pages':'cache';
+  document.getElementById('v-zip').className=v==='zip'?'':'cache';
+  document.querySelectorAll('.onglets button').forEach(function(b){b.classList.toggle('on',b.dataset.v===v)});
+}
+document.querySelectorAll('.panneau input,.panneau select').forEach(function(e){e.addEventListener('change',bati)});
+chrono();bati();
+</script>
+</body>
+</html>
