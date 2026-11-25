@@ -234,6 +234,7 @@ async function peOpenCellEdit(eventId,creneauLabel,jourStr,crecheId,semaine){
     document.getElementById('pe-edit-title').textContent='Ajouter sur ce créneau';
     document.getElementById('pe-edit-delete-btn').style.display='none';
   }
+  peAbsInit(ev);
   document.getElementById('modal-pe-edit-wrap').classList.add('open');
 
   // Puis on élargit : la semaine affichée ne contient que les personnes déjà
@@ -256,6 +257,7 @@ async function peOpenCellEdit(eventId,creneauLabel,jourStr,crecheId,semaine){
       (choixActuel&&choixActuel!=='__autre__')?choixActuel:courant
     );
     if(choixActuel==='__autre__'&&sel)sel.value='__autre__';
+    peAbsRemplir(connus.concat(refs));
   }catch(e){console.error('[PlanningEquipe] liste prénoms',e);}
 }
 
@@ -271,6 +273,7 @@ async function peSaveCellEdit(){
   if(!prenom){alert('Choisissez ou saisissez un prénom.');return;}
 
   const{eventId,creneauLabel,jour,crecheId,semaine}=_peEditCtx;
+  if(eventId&&!peAbsValider(prenom))return;
   const creneau=ipParseCreneauLabel(creneauLabel);
   const prevRow=eventId?(_peCache[crecheId+'_'+semaine]||[]).find(r=>r.id===eventId):null;
   const prevPrenom=prevRow?prevRow.prenom:null;
@@ -296,10 +299,208 @@ async function peSaveCellEdit(){
     type:'presence',label:prenom,lieu:null,hdebut:creneau?.hdebut||null,hfin:creneau?.hfin||null,pause:creneau?.pause||null
   });
 
+  let msg=prenom+' enregistré(e) ✅';
+  if(eventId){
+    try{msg=(await peAbsAppliquer(crecheId,semaine,jour,prevPrenom,prenom,eventId))||msg;}
+    catch(e){console.error('[PlanningEquipe] absence:',e);showBanner('Absence / remplacement non enregistré : '+(e.message||e),'error');}
+  }
   peInvalidate(crecheId,semaine);
   closeModal('modal-pe-edit-wrap');
   await renderPlanning();
-  showBanner(prenom+' enregistré(e) ✅');
+  showBanner(msg);
+}
+
+// ── ABSENCE, REMPLACEMENT ET HEURES SUPPLÉMENTAIRES (directement dans la case du planning) ──
+// Une absence garde la ligne (type 'absent' / 'conge', créneau affiché grisé, hors effectifs).
+// Le remplacement est soit une pro libre ce jour-là (nouvelle ligne sur le même créneau, colonne
+// remplace_prenom), soit une pro déjà présente qui allonge sa journée (heures supplémentaires :
+// son horaire change, l'horaire d'origine est gardé dans creneau_label_initial pour être rétabli).
+// sql/planning_equipe_absence_remplacement.sql, à appliquer à la main.
+const PE_ABS_MOTIFS={arret:'Arrêt maladie',enfant_malade:'Enfant malade',conge:'Congé',autre:'Absence'};
+function peHM(t){const m=/^(\d{1,2}):(\d{2})/.exec(String(t||''));return m?parseInt(m[1],10)*60+parseInt(m[2],10):null;}
+function peMinToHM(m){return String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0');}
+function peRowSegs(r){
+  const s=peCreneauSegments(r.creneau_label);if(s)return s;
+  const d0=peHM(r.hdebut),d1=peHM(r.hfin);if(d0===null||d1===null||d1<=d0)return null;
+  const pz=String(r.pause||'').split('-'),p0=peHM(pz[0]),p1=peHM(pz[1]);
+  return(p0!==null&&p1!==null&&p0>d0&&p1<d1&&p1>p0)?[[d0,p0],[p1,d1]]:[[d0,d1]];
+}
+function peSegsTotal(s){return s.reduce((a,x)=>a+x[1]-x[0],0);}
+// Même pause que la personne, début / fin élargis.
+function peSegsEtendus(segs,debut,fin){
+  if(segs.length>=2){const p0=segs[0][1],p1=segs[1][0];if(debut<p0&&fin>p1)return[[debut,p0],[p1,fin]];}
+  return[[debut,fin]];
+}
+function peSegsLabel(s){return s.map(x=>peFmtHeure(x[0])+'-'+peFmtHeure(x[1])).join('/');}
+function peSegsChamps(s){
+  return{creneau_label:peSegsLabel(s),hdebut:peMinToHM(s[0][0]),hfin:peMinToHM(s[s.length-1][1]),
+    pause:s.length>1?peMinToHM(s[0][1])+'-'+peMinToHM(s[1][0]):null};
+}
+function peAbsRowCourante(){
+  if(!_peEditCtx||!_peEditCtx.eventId)return null;
+  return(_peCache[_peEditCtx.crecheId+'_'+_peEditCtx.semaine]||[]).find(r=>r.id===_peEditCtx.eventId)||null;
+}
+// Lignes de remplacement rattachées à une personne absente ce jour-là.
+function peAbsRemplacements(rows,jour,idAbsente,prenoms){
+  return rows.filter(r=>r.jour===jour&&r.id!==idAbsente&&r.remplace_prenom&&prenoms.includes(r.remplace_prenom));
+}
+function peAbsInit(ev){
+  const wrap=document.getElementById('pe-abs-wrap');if(!wrap)return;
+  const ok=!!ev&&(!ev.type||['presence','absent','conge'].includes(ev.type));
+  wrap.style.display=ok?'':'none';
+  if(!ok)return;
+  const absent=ev.type==='absent'||ev.type==='conge';
+  document.getElementById('pe-abs-statut').value=absent?(ev.absence_motif||(ev.type==='conge'?'conge':'autre')):'';
+  document.getElementById('pe-abs-rempl-autre').value='';
+  peAbsRemplir([],true);
+  peAbsChange();
+}
+function peAbsChange(){
+  const st=document.getElementById('pe-abs-statut').value;
+  document.getElementById('pe-abs-rempl-wrap').style.display=st?'':'none';
+  if(st)peAbsRemplChange();
+}
+// Remplit la liste des remplaçantes : pros déjà présentes ce jour (heures supplémentaires) puis
+// personnes sans horaire ce jour-là. Garde le choix en cours si on la remplit une 2e fois.
+function peAbsRemplir(extraNoms,premier){
+  const row=peAbsRowCourante();const sel=document.getElementById('pe-abs-rempl');
+  if(!row||!sel)return;
+  const{crecheId,semaine,jour}=_peEditCtx;
+  const rows=_peCache[crecheId+'_'+semaine]||[];
+  const duJour=rows.filter(r=>r.jour===jour&&r.id!==row.id);
+  const dejaRempl=peAbsRemplacements(rows,jour,row.id,[row.prenom]);
+  const memo=premier?'':sel.value;
+  const presentes=duJour.filter(r=>(!r.type||r.type==='presence')&&r.creneau_label&&(!r.remplace_prenom||r.remplace_prenom===row.prenom)&&!(dejaRempl.includes(r)&&!r.creneau_label_initial));
+  const pris=new Set(duJour.map(r=>ipNormStr(r.prenom)));pris.add(ipNormStr(row.prenom));
+  const libres=[...new Set(rows.map(r=>r.prenom).concat(extraNoms||[]).filter(Boolean))]
+    .filter(n=>!pris.has(ipNormStr(n))||dejaRempl.some(r=>r.prenom===n&&!r.creneau_label_initial))
+    .sort((a,b)=>a.localeCompare(b,'fr',{sensitivity:'base'}));
+  const lib=r=>{const sg=peRowSegs(r);return escHtml(r.prenom)+(sg?' — présent(e) '+peFmtHeure(sg[0][0])+' → '+peFmtHeure(sg[sg.length-1][1]):'');};
+  sel.innerHTML='<option value="">Personne (créneau non couvert)</option>'
+    +(presentes.length?'<optgroup label="Déjà présent(e) ce jour — heures supplémentaires">'+presentes.map(r=>'<option value="p:'+escHtml(r.prenom)+'">'+lib(r)+'</option>').join('')+'</optgroup>':'')
+    +(libres.length?'<optgroup label="Sans horaire ce jour-là">'+libres.map(n=>'<option value="n:'+escHtml(n)+'">'+escHtml(n)+'</option>').join('')+'</optgroup>':'')
+    +'<option value="__autre__">Autre (saisir)…</option>';
+  let val=memo;
+  if(!val&&dejaRempl.length){const r=dejaRempl[0];val=(r.creneau_label_initial?'p:':'n:')+r.prenom;}
+  if(val&&[...sel.options].some(o=>o.value===val))sel.value=val;
+  if(premier)peAbsRemplChange(true);
+}
+function peAbsBase(nom){
+  const{crecheId,semaine,jour}=_peEditCtx;
+  const r=(_peCache[crecheId+'_'+semaine]||[]).find(x=>x.jour===jour&&ipNormStr(x.prenom)===ipNormStr(nom));
+  if(!r)return null;
+  // Horaire d'origine : celui d'avant les heures supplémentaires déjà saisies.
+  return peCreneauSegments(r.creneau_label_initial)||peRowSegs(r);
+}
+function peAbsRemplChange(garder){
+  const v=document.getElementById('pe-abs-rempl').value;
+  document.getElementById('pe-abs-rempl-autre-wrap').style.display=v==='__autre__'?'':'none';
+  const box=document.getElementById('pe-abs-hsup-wrap');
+  if(!v.startsWith('p:')){box.style.display='none';return;}
+  const nom=v.slice(2),base=peAbsBase(nom),row=peAbsRowCourante();
+  const absSegs=row?peRowSegs(row):null;
+  if(!base){box.style.display='none';return;}
+  document.getElementById('pe-abs-hsup-nom').textContent=nom;
+  const{crecheId,semaine,jour}=_peEditCtx;
+  const sa=(_peCache[crecheId+'_'+semaine]||[]).find(x=>x.jour===jour&&x.prenom===nom);
+  const deja=sa&&sa.creneau_label_initial&&sa.remplace_prenom===(row&&row.prenom);
+  let d,f;
+  if(deja){const cur=peRowSegs(sa);d=cur[0][0];f=cur[cur.length-1][1];}
+  else{
+    d=base[0][0];f=base[base.length-1][1];
+    if(absSegs){d=Math.min(d,absSegs[0][0]);f=Math.max(f,absSegs[absSegs.length-1][1]);}
+  }
+  document.getElementById('pe-abs-hdebut').value=peMinToHM(d);
+  document.getElementById('pe-abs-hfin').value=peMinToHM(f);
+  box.style.display='';
+  peAbsHsupCalc();
+}
+function peAbsHsupCalc(){
+  const v=document.getElementById('pe-abs-rempl').value;
+  const info=document.getElementById('pe-abs-hsup-info');
+  if(!v.startsWith('p:'))return;
+  const base=peAbsBase(v.slice(2));if(!base)return;
+  const d=peHM(document.getElementById('pe-abs-hdebut').value),f=peHM(document.getElementById('pe-abs-hfin').value);
+  if(d===null||f===null||f<=d){info.textContent='Renseignez un début et une fin cohérents.';return;}
+  const ext=peSegsEtendus(base,d,f),extra=peSegsTotal(ext)-peSegsTotal(base);
+  info.innerHTML='Horaire d\'origine : '+peFmtHeure(base[0][0])+' → '+peFmtHeure(base[base.length-1][1])+' ('+peFmtDuree(peSegsTotal(base))+').<br><strong>'
+    +(extra>0?'+'+peFmtDuree(extra)+' d\'heures supplémentaires':'Aucune heure supplémentaire')+'</strong>';
+}
+function peAbsValider(prenom){
+  const wrap=document.getElementById('pe-abs-wrap');
+  if(!wrap||wrap.style.display==='none')return true;
+  const st=document.getElementById('pe-abs-statut').value;
+  if(!st)return true;
+  const v=document.getElementById('pe-abs-rempl').value;
+  if(v==='__autre__'&&!document.getElementById('pe-abs-rempl-autre').value.trim()){alert('Saisissez le prénom de la remplaçante, ou choisissez « Personne ».');return false;}
+  if(v&&ipNormStr(v==='__autre__'?document.getElementById('pe-abs-rempl-autre').value:v.slice(2))===ipNormStr(prenom)){alert('La personne absente ne peut pas se remplacer elle-même.');return false;}
+  if(v.startsWith('p:')){
+    const d=peHM(document.getElementById('pe-abs-hdebut').value),f=peHM(document.getElementById('pe-abs-hfin').value);
+    if(d===null||f===null||f<=d){alert('Renseignez un début et une fin cohérents pour les heures supplémentaires.');return false;}
+  }
+  return true;
+}
+async function peAbsAppliquer(crecheId,semaine,jour,prevPrenom,prenom,eventId){
+  const wrap=document.getElementById('pe-abs-wrap');
+  if(!wrap||wrap.style.display==='none')return null;
+  const statut=document.getElementById('pe-abs-statut').value;
+  const choix=statut?document.getElementById('pe-abs-rempl').value:'';
+  const cache=_peCache[crecheId+'_'+semaine]||[];
+  const row=cache.find(r=>r.id===eventId);if(!row)return null;
+  const anciens=peAbsRemplacements(cache,jour,eventId,[prevPrenom,prenom].filter(Boolean));
+  const etaitAbsent=row.type==='absent'||row.type==='conge';
+  if(!statut&&!etaitAbsent&&!anciens.length)return null;
+  const check=async(q)=>{const{error}=await q;if(error)throw error;};
+  const champsRow=r=>({type:'presence',label:r.prenom,lieu:r.lieu||null,hdebut:r.hdebut||null,hfin:r.hfin||null,pause:r.pause||null});
+
+  // 1) Défaire l'éventuel remplacement précédent (horaire d'origine rétabli, ou ligne retirée).
+  for(const a of anciens){
+    if(a.creneau_label_initial){
+      const sg=peCreneauSegments(a.creneau_label_initial);
+      const ch=sg?peSegsChamps(sg):{creneau_label:a.creneau_label_initial};
+      await check(sb.from('planning_equipe').update(Object.assign({},ch,{remplace_prenom:null,heures_sup_min:null,creneau_label_initial:null})).eq('id',a.id));
+      await peSyncReferentPlanning(crecheId,semaine,jour,a.prenom,champsRow(Object.assign({},a,ch)));
+    }else{
+      await check(sb.from('planning_equipe').delete().eq('id',a.id));
+      await peUnsyncReferentPlanning(crecheId,semaine,jour,a.prenom);
+    }
+  }
+
+  // 2) Statut de la personne
+  if(!statut){
+    await check(sb.from('planning_equipe').update({type:'presence',absence_motif:null}).eq('id',eventId));
+    await peSyncReferentPlanning(crecheId,semaine,jour,prenom,champsRow(row));
+    return prenom+' est de nouveau présent(e) ✅';
+  }
+  await check(sb.from('planning_equipe').update({type:statut==='conge'?'conge':'absent',absence_motif:statut}).eq('id',eventId));
+  await peSyncReferentPlanning(crecheId,semaine,jour,prenom,{type:statut==='conge'?'conge':'absent',label:PE_ABS_MOTIFS[statut],hdebut:null,hfin:null,pause:null});
+  if(!choix)return prenom+' : '+PE_ABS_MOTIFS[statut].toLowerCase()+' enregistré(e) — créneau non couvert ⚠';
+
+  // 3) Remplacement
+  const nom=choix==='__autre__'?document.getElementById('pe-abs-rempl-autre').value.trim():choix.slice(2);
+  const{data:fresh,error:eF}=await sb.from('planning_equipe').select('*').eq('creche_id',crecheId).eq('semaine',semaine).eq('jour',jour);
+  if(eF)throw eF;
+  const hers=(fresh||[]).find(r=>ipNormStr(r.prenom)===ipNormStr(nom)&&r.id!==eventId);
+  if(hers){
+    if(hers.type&&hers.type!=='presence')return prenom+' enregistré(e), mais '+nom+' n\'est pas disponible ce jour-là ⚠';
+    const base=peRowSegs(hers);
+    if(!base)return prenom+' enregistré(e), mais l\'horaire de '+nom+' est illisible ⚠';
+    const absSegs=peRowSegs(row);
+    let d=base[0][0],f=base[base.length-1][1];
+    if(choix.startsWith('p:')){d=peHM(document.getElementById('pe-abs-hdebut').value);f=peHM(document.getElementById('pe-abs-hfin').value);}
+    else if(absSegs){d=Math.min(d,absSegs[0][0]);f=Math.max(f,absSegs[absSegs.length-1][1]);}
+    const ext=peSegsEtendus(base,d,f),extra=peSegsTotal(ext)-peSegsTotal(base);
+    const ch=peSegsChamps(ext);
+    await check(sb.from('planning_equipe').update(Object.assign({},ch,{remplace_prenom:prenom,creneau_label_initial:hers.creneau_label||peSegsLabel(base),heures_sup_min:extra>0?extra:null})).eq('id',hers.id));
+    await peSyncReferentPlanning(crecheId,semaine,jour,hers.prenom,champsRow(Object.assign({},hers,ch)));
+    return prenom+' absent(e) — '+nom+' la remplace'+(extra>0?' (+'+peFmtDuree(extra)+' d\'heures sup.)':'')+' ✅';
+  }
+  await check(sb.from('planning_equipe').upsert({
+    creche_id:crecheId,prenom:nom,semaine,jour,type:'presence',label:nom,lieu:null,
+    hdebut:row.hdebut||null,hfin:row.hfin||null,pause:row.pause||null,creneau_label:row.creneau_label,remplace_prenom:prenom
+  },{onConflict:'creche_id,prenom,semaine,jour'}));
+  await peSyncReferentPlanning(crecheId,semaine,jour,nom,{type:'presence',label:nom,lieu:null,hdebut:row.hdebut||null,hfin:row.hfin||null,pause:row.pause||null});
+  return prenom+' absent(e) — '+nom+' la remplace ✅';
 }
 
 async function peDeleteCellEdit(){

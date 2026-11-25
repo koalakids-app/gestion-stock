@@ -314,12 +314,26 @@ function getPlanningEquipeTable(rows,semaine,crecheName,crecheId,editable,forPri
 
   function renderCell(ev,crecheName){
     if(!ev)return '<span style="color:#ddd">—</span>';
-    const color=peColorForName(ev.prenom);
+    const absent=ev.type==='absent'||ev.type==='conge';
+    const color=absent?'#9C9AA8':peColorForName(ev.prenom);
     const ailleurs=ev.lieu&&ev.lieu!==crecheName;
-    const clickAttr=editable?'draggable="true" data-dnd-item="pe" data-id="'+ev.id+'" onclick="peOpenCellEdit(\''+ev.id+'\',\''+ev.creneau_label.replace(/'/g,"\\'")+'\',\''+ev.jour+'\',\''+crecheId+'\',\''+semaine+'\')" style="cursor:pointer;'+'background:'+color+';color:#fff;border-radius:4px;padding:'+_peBadgePad+';font-size:'+_peFSCell+';text-align:center"':'style="background:'+color+';color:#fff;border-radius:4px;padding:'+_peBadgePad+';font-size:'+_peFSCell+';text-align:center"';
+    const bg='background:'+(absent?'repeating-linear-gradient(45deg,#9C9AA8,#9C9AA8 6px,#B4B2BE 6px,#B4B2BE 12px)':color)+';color:#fff;border-radius:4px;padding:'+_peBadgePad+';font-size:'+_peFSCell+';text-align:center';
+    const clickAttr=editable?(absent?'':'draggable="true" data-dnd-item="pe" data-id="'+ev.id+'" ')+'onclick="peOpenCellEdit(\''+ev.id+'\',\''+ev.creneau_label.replace(/'/g,"\\'")+'\',\''+ev.jour+'\',\''+crecheId+'\',\''+semaine+'\')" style="cursor:pointer;'+bg+'"':'style="'+bg+'"';
+    // Absence : nom barré + motif ; la personne qui la remplace est citée dans la même case.
+    const motif=absent?PE_ABS_MOTIFS[ev.absence_motif||(ev.type==='conge'?'conge':'autre')]:'';
+    const rempl=absent?rows.filter(r=>r.jour===ev.jour&&r.remplace_prenom===ev.prenom).map(r=>r.prenom):[];
+    const infoAbs=absent
+      ?'<div style="font-size:'+_peFSDay+';opacity:.95"><i class="ti ti-user-off"></i> '+escHtml(motif)+'</div>'
+        +(rempl.length?'<div style="font-size:'+_peFSDay+';font-weight:700">→ remplacé(e) par '+rempl.map(escHtml).join(', ')+'</div>':'<div style="font-size:'+_peFSDay+';font-weight:700;color:#FDE7CC">⚠ non couvert</div>')
+      :'';
+    const infoRempl=(!absent&&ev.remplace_prenom)
+      ?'<div style="font-size:'+_peFSDay+';opacity:.95"><i class="ti ti-arrows-exchange"></i> remplace '+escHtml(ev.remplace_prenom)+'</div>'
+        +(ev.heures_sup_min>0?'<div style="font-size:'+_peFSDay+';font-weight:800;background:rgba(255,255,255,.22);border-radius:3px;margin-top:2px;padding:1px 3px">+'+peFmtDuree(ev.heures_sup_min)+' sup.</div>':'')
+      :'';
     return '<div '+clickAttr+'>'+
-      '<strong>'+ev.prenom+'</strong>'+(ailleurs?' <span style="opacity:0.85">('+ev.lieu+')</span>':'')+
-      peContesSurCellule(ev,days5).map(c=>'<div title="Absente le temps des contes" style="margin-top:3px;background:repeating-linear-gradient(45deg,#FFF7ED,#FFF7ED 5px,#FDE7CC 5px,#FDE7CC 10px);color:#92400E;border:1px dashed #B45309;border-radius:3px;padding:2px 4px;font-size:'+_peFSCell+'"><i class="ti ti-book-2"></i> '+pgContesLibelleCourt(c)+'</div>').join('')+
+      '<strong'+(absent?' style="text-decoration:line-through"':'')+'>'+ev.prenom+'</strong>'+(ailleurs?' <span style="opacity:0.85">('+ev.lieu+')</span>':'')+
+      infoAbs+infoRempl+
+      (absent?'':peContesSurCellule(ev,days5).map(c=>'<div title="Absente le temps des contes" style="margin-top:3px;background:repeating-linear-gradient(45deg,#FFF7ED,#FFF7ED 5px,#FDE7CC 5px,#FDE7CC 10px);color:#92400E;border:1px dashed #B45309;border-radius:3px;padding:2px 4px;font-size:'+_peFSCell+'"><i class="ti ti-book-2"></i> '+pgContesLibelleCourt(c)+'</div>').join(''))+
       '</div>';
   }
 
