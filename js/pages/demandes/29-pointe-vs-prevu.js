@@ -315,7 +315,11 @@ async function ptpGanttEquipe(o){
     +'<div style="position:sticky;left:0;z-index:2;background:#fff;width:'+(NAME_W+30)+'px;flex-shrink:0;font-size:11px;font-weight:700;color:'+col+';padding-right:8px;text-align:right;box-sizing:border-box">'+titre+'</div>'
     +'<div style="display:flex;width:'+(COLS*COL_W)+'px;flex-shrink:0;border-left:1px solid #e0dff0">'+cells+'</div><div style="width:'+DUR_W+'px;flex-shrink:0"></div></div>';
   const cell=(txt,bg,col,tip)=>'<div title="'+escHtml(tip||'')+'" style="width:'+cellW+'px;flex-shrink:0;box-sizing:border-box;text-align:center;overflow:hidden;white-space:nowrap;letter-spacing:-.4px;font-size:'+fs+'px;font-weight:700;line-height:24px;color:'+col+';background:'+bg+'">'+txt+'</div>';
-  let html='<div style="display:flex;align-items:center;border-top:2px solid var(--koala);margin-top:6px;padding:6px 0 2px"><div style="font-size:12px;font-weight:800;color:var(--koala)">Équipe — pointé / prévu</div></div>'+pieces.join('');
+  // Échelle des heures, comme en tête du Gantt des enfants (colonnes identiques)
+  let echelle='<div style="display:flex;align-items:center;border-bottom:1px solid #e0dff0;margin-bottom:2px"><div style="position:sticky;left:0;z-index:3;background:#fff;width:'+(NAME_W+30)+'px;flex-shrink:0;height:16px"></div>';
+  for(let h=H_START;h<H_START+COLS/2;h++)echelle+='<div style="width:'+(COL_W*2)+'px;flex-shrink:0;font-size:10px;font-weight:600;color:var(--muted);text-align:left;border-left:1px solid #e0dff0;padding-left:2px">'+h+'h</div>';
+  echelle+='<div style="width:'+DUR_W+'px;flex-shrink:0;font-size:10px;font-weight:600;color:var(--muted);text-align:right;padding-right:8px">Pointé / prévu</div></div>';
+  let html='<div style="display:flex;align-items:center;border-top:2px solid var(--koala);margin-top:6px;padding:6px 0 2px"><div style="font-size:12px;font-weight:800;color:var(--koala)">Équipe — pointé / prévu</div></div>'+echelle+pieces.join('');
   if(!futur){
     let c1='',c2='';
     for(let q=0;q<nQ;q++){
