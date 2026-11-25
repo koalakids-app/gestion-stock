@@ -10,10 +10,14 @@ function recapMoisLabel(iso) {
   const l = d.toLocaleDateString('fr-FR', { month: 'short', year: '2-digit' });
   return l.replace('.', '');
 }
+// Le récapitulatif démarre en novembre 2026 : les mois antérieurs ne sont ni affichés ni comptés.
+const RECAP_DEBUT = '2026-11-01';
 function recapMoisListe(n) {
   const out = [], d = new Date(); d.setDate(1);
   for (let i = 0; i < n; i++) {
-    out.unshift(d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-01');
+    const m = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-01';
+    if (m < RECAP_DEBUT) break;
+    out.unshift(m);
     d.setMonth(d.getMonth() - 1);
   }
   return out;
@@ -48,7 +52,7 @@ function renderCouchesRecap() {
   }
   const mois = recapMoisListe(12);
   const crechesVisibles = new Set(couchesCrechesVisibles());
-  const lignes = COUCHES_RECAP.filter(x => crechesVisibles.has(x.creche));
+  const lignes = COUCHES_RECAP.filter(x => crechesVisibles.has(x.creche) && x.mois >= RECAP_DEBUT);
   const th = 'padding:5px 8px;text-align:right;font-size:11px;color:var(--ink3);white-space:nowrap';
   const td = 'padding:5px 8px;text-align:right;font-size:12.5px;border-top:1px solid var(--border)';
   const tdn = 'padding:5px 8px;text-align:left;font-size:12.5px;border-top:1px solid var(--border);white-space:nowrap';
@@ -59,7 +63,7 @@ function renderCouchesRecap() {
       <span style="font-size:12.5px;color:var(--ink3);font-weight:700">📊 Consommation de couches par mois</span>
       <button class="btn btn-sm btn-secondary" style="margin-left:auto" onclick="coucheRecapCsv()">⬇️ CSV</button>
     </div>
-    <div style="font-size:11.5px;color:var(--ink3);margin-bottom:8px">D'après les saisies « Couches du jour » des 12 derniers mois.</div>`;
+    <div style="font-size:11.5px;color:var(--ink3);margin-bottom:8px">D'après les saisies « Couches du jour » depuis novembre 2026.</div>`;
   if (!lignes.length) html += `<div style="font-size:12.5px;color:var(--ink3)">Aucune consommation saisie sur la période.</div>`;
 
   // 1) Total par mois, une table par crèche
@@ -104,7 +108,7 @@ function coucheRecapCsv() {
   const mois = recapMoisListe(12);
   const crechesVisibles = new Set(couchesCrechesVisibles());
   const enfants = new Map();
-  COUCHES_RECAP.filter(x => crechesVisibles.has(x.creche)).forEach(x => {
+  COUCHES_RECAP.filter(x => crechesVisibles.has(x.creche) && x.mois >= RECAP_DEBUT).forEach(x => {
     const k = x.creche + '|' + x.enfantId;
     if (!enfants.has(k)) enfants.set(k, { creche: x.creche, enfant: x.prenom + ' ' + (x.nom || ''), produit: (x.typeCouche === 'culotte' ? 'Culotte' : 'Couche') + ' T' + (x.taille || ''), m: {} });
     const e = enfants.get(k); e.m[x.mois] = (e.m[x.mois] || 0) + x.nb;
