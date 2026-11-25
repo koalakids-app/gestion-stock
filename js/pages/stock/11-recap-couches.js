@@ -10,15 +10,14 @@ function recapMoisLabel(iso) {
   const l = d.toLocaleDateString('fr-FR', { month: 'short', year: '2-digit' });
   return l.replace('.', '');
 }
-// Le récapitulatif démarre en novembre 2026 : les mois antérieurs ne sont ni affichés ni comptés.
+// Le récapitulatif démarre en novembre 2026 : 12 colonnes à partir de ce mois (les mois à venir restent vides),
+// les mois antérieurs ne sont ni affichés ni comptés.
 const RECAP_DEBUT = '2026-11-01';
 function recapMoisListe(n) {
-  const out = [], d = new Date(); d.setDate(1);
+  const out = [], d = new Date(RECAP_DEBUT + 'T00:00:00');
   for (let i = 0; i < n; i++) {
-    const m = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-01';
-    if (m < RECAP_DEBUT) break;
-    out.unshift(m);
-    d.setMonth(d.getMonth() - 1);
+    out.push(d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-01');
+    d.setMonth(d.getMonth() + 1);
   }
   return out;
 }
@@ -56,6 +55,8 @@ function renderCouchesRecap() {
   const th = 'padding:5px 8px;text-align:right;font-size:11px;color:var(--ink3);white-space:nowrap';
   const td = 'padding:5px 8px;text-align:right;font-size:12.5px;border-top:1px solid var(--border)';
   const tdn = 'padding:5px 8px;text-align:left;font-size:12.5px;border-top:1px solid var(--border);white-space:nowrap';
+  // Peu de mois (début en nov. 2026) : colonnes serrées plutôt qu'étirées sur toute la largeur.
+  const larg = mois.length > 5 ? 'width:100%' : 'width:auto;min-width:440px';
   const nbf = n => n ? n.toLocaleString('fr-FR') : '<span style="color:var(--ink3)">–</span>';
 
   let html = `<div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:14px 16px">
@@ -63,7 +64,7 @@ function renderCouchesRecap() {
       <span style="font-size:12.5px;color:var(--ink3);font-weight:700">📊 Consommation de couches par mois</span>
       <button class="btn btn-sm btn-secondary" style="margin-left:auto" onclick="coucheRecapCsv()">⬇️ CSV</button>
     </div>
-    <div style="font-size:11.5px;color:var(--ink3);margin-bottom:8px">D'après les saisies « Couches du jour » depuis novembre 2026.</div>`;
+    <div style="font-size:11.5px;color:var(--ink3);margin-bottom:8px">D'après les saisies « Couches du jour » de novembre 2026 à octobre 2027.</div>`;
   if (!lignes.length) html += `<div style="font-size:12.5px;color:var(--ink3)">Aucune consommation saisie sur la période.</div>`;
 
   // 1) Total par mois, une table par crèche
@@ -80,7 +81,7 @@ function renderCouchesRecap() {
     };
     const euro = v => v === null ? '<span title="prix manquant">?</span>' : (v ? v.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €' : '–');
     html += `<div style="font-weight:800;font-size:13.5px;margin:12px 0 4px">${recapEsc(creche)}</div>
-      <div style="overflow-x:auto"><table style="border-collapse:collapse;width:100%">
+      <div style="overflow-x:auto"><table style="border-collapse:collapse;${larg}">
       <tr><th style="${th};text-align:left"></th>${mois.map(m => `<th style="${th}">${recapMoisLabel(m)}</th>`).join('')}</tr>
       <tr><td style="${tdn}"><b>Couches utilisées</b></td>${mois.map(m => `<td style="${td}"><b>${nbf(total(m))}</b></td>`).join('')}</tr>
       <tr><td style="${tdn}">Enfants concernés</td>${mois.map(m => `<td style="${td}">${nbf(nbEnf(m))}</td>`).join('')}</tr>
@@ -95,7 +96,7 @@ function renderCouchesRecap() {
     });
     const liste = [...enfants.values()].sort((a, b) => b.tot - a.tot);
     html += `<details style="margin-top:8px"><summary style="cursor:pointer;font-size:12px;color:var(--accent);font-weight:600">Détail par enfant (${liste.length})</summary>
-      <div style="overflow-x:auto;margin-top:6px"><table style="border-collapse:collapse;width:100%">
+      <div style="overflow-x:auto;margin-top:6px"><table style="border-collapse:collapse;${larg}">
       <tr><th style="${th};text-align:left">Enfant</th><th style="${th};text-align:left">Produit</th>${mois.map(m => `<th style="${th}">${recapMoisLabel(m)}</th>`).join('')}<th style="${th}">Total</th></tr>
       ${liste.map(e => `<tr><td style="${tdn}">${recapEsc(e.nom)}</td><td style="${tdn};color:var(--ink3)">${e.prod}</td>${mois.map(m => `<td style="${td}">${nbf(e.m[m] || 0)}</td>`).join('')}<td style="${td}"><b>${e.tot.toLocaleString('fr-FR')}</b></td></tr>`).join('')}
       </table></div></details>`;
