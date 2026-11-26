@@ -514,6 +514,7 @@ function renderCouchesCommande() {
       <span style="flex:1"></span>
       ${bouton(0, 'Mois en cours')}${bouton(1, 'Mois suivant')}
       <button class="btn btn-sm btn-secondary" onclick="coucheCommandeCopier()">📋 Copier</button>
+      <button class="btn btn-sm btn-secondary" onclick="coucheImprimerTailles()">🖨️ Liste des tailles</button>
     </div>`;
   let totalGeneral = 0, sansPrix = false;
   const crechesAffichees = couchesCrechesVisibles();
