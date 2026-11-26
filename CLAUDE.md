@@ -15,6 +15,7 @@ chargés tels quels par les pages (ex. `demandes.html` charge `js/pages/demandes
 ## Règles métier de la commande repas traiteur (MCM)
 - Le comptage vient d'une source unique : `crCountsParJour` (`js/pages/demandes/06-export-direct.js`), utilisée par le bon et par le rappel des effectifs (`mcmCmdRenderEffectifs`, `04-filtre-presents-uniquement.js`).
 - Exclus du bon : enfants au biberon (BIB), **goûter crèche** (`enfants.gouter_base = 'creche'`, uniquement le goûter), **PAI actif avec panier repas** (repas et goûter).
+- **Jour de fermeture de la crèche** (`fermetureAt` : fermeture propre à la crèche ou du réseau) : `crCountsParJour` ne compte rien, pas de repas témoin sur le bon, colonne « fermé » dans le rappel des effectifs.
 - Aucun goûter avant 6 mois ; le régime SV n'existe pas au goûter.
 - Ligne du bon : le code repas décide, pas l'âge (`mcmLigne`) — BB → « Bébés − de 6 mois », M → « Bébés 6-18 mois », G → « Grands » (ou périscolaire à partir de 48 mois).
 - Repas BB (légumes sans protéines, avec ou sans régime) : goûter compris dans le repas, donc aucun goûter ; le goûter « bébé » (`gbb`) s'appelle désormais « goûter moyen » à l'écran.

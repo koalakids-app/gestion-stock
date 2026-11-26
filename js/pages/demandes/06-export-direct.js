@@ -644,6 +644,10 @@ function crRenderAlerte(){
 function crCountsParJour(ctx){
   return ctx.days5.map(function(d,i){
     const repas={bb6:{},bb18:{},grand:{},peri:{}},gouter={gbb:{},ggr:{}};
+    /* Crèche fermée ce jour-là (vacances, férié, journée pédagogique : fermeture propre
+       à la crèche ou du réseau) : rien à commander, même si une prévision ou une ligne
+       de présence résiduelle existe. */
+    if(fermetureAt(ctx.crecheId,ctx.dateStrs[i]))return Object.assign({},repas,gouter);
     ctx.rows.forEach(function(r){
       const cell=r.cells[i];
       if(!cell.present)return;
@@ -685,7 +689,8 @@ function crCompute(notify){
   MCM_ROWS.forEach(function(r){vals[r.k]=['','','','',''];});
   crCountsParJour(ctx).forEach(function(c,i){
     ['bb6','bb18','grand','peri','gbb','ggr'].forEach(function(k){vals[k][i]=crFmtCell(c[k]);});
-    vals.temoin[i]='OUI';   // un plat témoin est prélevé chaque jour
+    // un plat témoin est prélevé chaque jour d'ouverture (pas un jour de fermeture)
+    vals.temoin[i]=fermetureAt(ctx.crecheId,ctx.dateStrs[i])?'':'OUI';
     vals.bag[i]='';
   });
   crRenderTable(vals);
