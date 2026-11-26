@@ -93,6 +93,11 @@ function mcmCmdRenderEffectifs(ctx){
   const paiNoms={};
   const jours=ctx.days5.map(function(d,i){
     const c=cnt[i],j={present:0,BIB:0,sans:0,PAI:0};
+    if(fermetureAt(ctx.crecheId,ctx.dateStrs[i])){   // crèche fermée : aucun effectif à commander
+      ['bb6','bb18','grand','peri','gbb','ggr'].forEach(function(k){j[k]=c[k];j[k+'_n']=0;});
+      j.midi=0;j.gouter=0;j.reg={SV:0,SPV:0,SPA:0};j.ferme=true;
+      return j;
+    }
     ctx.rows.forEach(function(r){
       const cell=r.cells[i];if(!cell.present)return;
       j.present++;
@@ -134,7 +139,7 @@ function mcmCmdRenderEffectifs(ctx){
     +kpi('Pic de la semaine',Math.max.apply(null,jours.map(function(j){return j.present;})))
     +kpi('Régimes particuliers',nbReg)+kpi('Au biberon (exclus)',tot('BIB'))+'</div>'
     +'<div style="overflow-x:auto"><table class="mcmc-eff"><thead><tr><th>Effectifs</th>'
-    +ctx.days5.map(function(d){return'<th>'+d.toLocaleDateString('fr-FR',{weekday:'short'}).replace('.','')+'<small>'+d.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'})+'</small></th>';}).join('')
+    +ctx.days5.map(function(d,i){return'<th>'+d.toLocaleDateString('fr-FR',{weekday:'short'}).replace('.','')+'<small>'+d.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'})+(jours[i].ferme?' · fermé':'')+'</small></th>';}).join('')
     +'<th>Semaine</th></tr></thead><tbody>'
     +ligne('Enfants présents','journée ou demi-journée','present','')
     +ligneBon('Bébés − de 6 mois','repas classiques','bb6','','bb',true)
