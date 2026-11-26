@@ -3,7 +3,7 @@
 // pdfjsLib, html2canvas, jspdf) : le code existant les utilise au clic, comme avant.
 // kkLibs.pret() renvoie une promesse résolue quand tout est chargé.
 // Chaque page choisit ses bibliothèques : <script src="js/libs-differees.js" data-libs="xlsx,jszip">
-// (sans data-libs : les six). Noms : xlsx, jszip, qrcode, pdfjs, pdfjs-jsd (pdf.js via jsDelivr), html2canvas, jspdf.
+// (sans data-libs : les six, sans exceljs). Noms : exceljs, xlsx, jszip, qrcode, pdfjs, pdfjs-jsd (pdf.js via jsDelivr), html2canvas, jspdf.
 (function (w) {
   var BASE = 'https://cdnjs.cloudflare.com/ajax/libs/';
   var JSD = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/';
@@ -14,7 +14,8 @@
     pdfjs: BASE + 'pdf.js/3.11.174/pdf.min.js',
     'pdfjs-jsd': JSD + 'pdf.min.js',
     html2canvas: BASE + 'html2canvas/1.4.1/html2canvas.min.js',
-    jspdf: BASE + 'jspdf/2.5.1/jspdf.umd.min.js'
+    jspdf: BASE + 'jspdf/2.5.1/jspdf.umd.min.js',
+    exceljs: BASE + 'exceljs/4.4.0/exceljs.min.js'
   };
   var WORKERS = { pdfjs: BASE + 'pdf.js/3.11.174/pdf.worker.min.js', 'pdfjs-jsd': JSD + 'pdf.worker.min.js' };
   var tag = document.currentScript;

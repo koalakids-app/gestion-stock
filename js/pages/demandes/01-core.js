@@ -72,6 +72,7 @@ let calMonthOffset=0,calFilterType='all',calFilterCreche=null,editingEvtId=null,
 let calOnlyMine=(localStorage.getItem('calOnlyMine')==='1');
 
 // Init au chargement complet de la page
+let _signOutPrete=null;
 window.addEventListener('DOMContentLoaded', async function() {
   document.getElementById('login-logo').src=LOGO_B64;
   document.getElementById('app-logo').src=LOGO_B64;
@@ -139,7 +140,9 @@ window.addEventListener('DOMContentLoaded', async function() {
     }catch(e){console.warn('[Retour enfant] session',e);}
     // pas de session valide → on retombe sur le comportement normal ci-dessous
   }
-  await sb.auth.signOut();
+  /* Le formulaire s'affiche tout de suite ; la déconnexion se termine en arrière-plan
+     (doLogin l'attend avant d'ouvrir la session). */
+  _signOutPrete=Promise.resolve(sb.auth.signOut()).catch(function(e){console.warn('[signOut]',e);});
   showLogin();
 });
 
@@ -765,6 +768,7 @@ async function doLogin(){
   err.style.display='none';
   if(!email||!pwd){err.textContent='Email et mot de passe requis.';err.style.display='block';return;}
   btn.disabled=true;btn.innerHTML='<i class="ti ti-loader"></i> Connexion…';
+  if(_signOutPrete)await _signOutPrete;
   const{data,error}=await sb.auth.signInWithPassword({email,password:pwd});
   if(error){
     const msg=error.message||'';
