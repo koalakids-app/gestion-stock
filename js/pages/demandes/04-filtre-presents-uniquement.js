@@ -885,6 +885,19 @@ async function renderPresenceGantt(){
       if(!ctMap[k]||(c.date_debut||'')>(ctMap[k].date_debut||'')) ctMap[k]=c;
     });
   }catch(err){ console.warn('[Gantt] lecture contrats',err); }
+  /* Absences déclarées (table enfants_absences) couvrant la date : l'enfant n'est plus
+     compté présent ni dessiné en barre, sauf s'il a été réellement pointé ce jour-là. */
+  const absDecl={};
+  try{
+    const{data:abData,error:abErr}=await sb.from('enfants_absences').select('enfant_id,date_debut,date_fin,motif')
+      .in('enfant_id',allEnfants.map(e=>e.id)).lte('date_debut',dateStr).gte('date_fin',dateStr);
+    if(abErr) throw abErr;
+    (abData||[]).forEach(function(a){absDecl[String(a.enfant_id)]=a;});
+  }catch(err){ console.warn('[Gantt] lecture absences',err); }
+  const _estAbsDecl=function(id){
+    const k=String(id);
+    return !!absDecl[k]&&!(presMap[id]&&presMap[id].pointe)&&!ptMap[k];
+  };
   const _nbSousContrat=Object.keys(ctMap).length;
   const _nbPeriode=Object.keys(ctPeriode).length;
   // Masquables = contrat(s) existants mais aucun ne couvre la date, et enfant non pointé.
@@ -916,7 +929,7 @@ async function renderPresenceGantt(){
   const _ferm=fermetureAt(crecheId,dateStr);
   const fermBanner=_ferm?'<div class="warn" style="background:var(--red-l,#FDE8E8);color:var(--red,#C62828);border-radius:12px;padding:9px 13px;font-size:12.5px;font-weight:700;margin-bottom:8px;display:flex;align-items:center;gap:7px"><i class="ti ti-door-off"></i> Crèche fermée ce jour — '+escHtml(fermetureLabel(_ferm))+'</div>':'';
   // Compter pr\u00e9sents
-  const presents=allEnfants.filter(e=>{const p=presMap[e.id]||{};return p.M==='present'||p.A==='present'||p.M==='partial'||p.A==='partial';});
+  const presents=allEnfants.filter(e=>{if(_estAbsDecl(e.id))return false;const p=presMap[e.id]||{};return p.M==='present'||p.A==='present'||p.M==='partial'||p.A==='partial';});
   const enfants=presOnlyPresents?presents:allEnfants;
   _presAbsentsDuJour=allEnfants.filter(e=>!presents.includes(e));
   if(!enfants.length){
@@ -964,7 +977,8 @@ async function renderPresenceGantt(){
     const p=presMap[e.id]||{};
     const hasM=p.M==='present'||p.M==='partial';
     const hasA=p.A==='present'||p.A==='partial';
-    const absent=!hasM&&!hasA;
+    const _abD=_estAbsDecl(e.id)?absDecl[String(e.id)]:null;
+    const absent=(!hasM&&!hasA)||!!_abD;
     // Ajouté « en attente de place » : barre hachurée, clic sur la barre pour confirmer la place.
     const attente=!absent&&!!p.attente;
     const _quarts=[];
@@ -1056,6 +1070,7 @@ async function renderPresenceGantt(){
     rowsHtml+='<div style="position:absolute;left:'+(12*COL_W)+'px;top:0;bottom:0;border-left:1px dashed #b0a8d8;pointer-events:none"></div>';
     if(absent){
       rowsHtml+='<div style="position:absolute;left:4px;right:4px;top:23px;height:10px;background:#f0eef8;border-radius:5px"></div>';
+      if(_abD)rowsHtml+='<div style="position:absolute;left:8px;top:19px;font-size:10.5px;font-weight:700;color:var(--muted);white-space:nowrap" title="Absence déclarée du '+escHtml(_abD.date_debut)+' au '+escHtml(_abD.date_fin)+'"><i class="ti ti-user-off"></i> Absence déclarée'+(_abD.motif?' — '+escHtml(_abD.motif):'')+'</div>';
     }else{
       // Arrière-plan : horaire de contrat, seulement quand une barre de pointage réel est affichée par-dessus.
       bgCtSegments.forEach(seg=>{
