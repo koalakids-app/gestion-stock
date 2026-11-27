@@ -391,6 +391,10 @@ async function nettExportCSV() {
       tout = tout.concat(page);
       if (page.length < 1000) break;
     }
+    // Classé par type (jeux, puis espaces), puis par fréquence ; à égalité, le plus récent d'abord (tri stable)
+    const ordF = Object.keys(NETT_FREQ), ordT = ['jeux', 'espace'];
+    const rang = (v, t) => { const i = t.indexOf(v); return i < 0 ? t.length : i; };
+    tout.sort((a, b) => rang(a.type, ordT) - rang(b.type, ordT) || rang(a.frequence, ordF) - rang(b.frequence, ordF));
     const lignes = [['Date', 'Crèche', 'Type', 'Jeu ou espace', 'Fréquence', 'Fait par', 'Produit', 'Observation']]
       .concat(tout.map(j => [nettDateFr(j.fait_le), j.creche, NETT_TYPES[j.type] || j.type, j.libelle, NETT_FREQ[j.frequence] || j.frequence || '', j.fait_par || '', j.produit || '', j.observation || '']));
     const csv = '﻿' + lignes.map(l => l.map(v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"').join(';')).join('\r\n');
