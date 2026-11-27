@@ -382,8 +382,11 @@ async function loadPlanning(){
   /* Garde-fou côté page : même si une règle RLS était trop large, un(e)
      employé(e) ne voit que ses lignes (prénom de la fiche ou planning_nom). */
   if(COLLAB_TYPE!=='referent'){
-    const cle=String(COLLAB.planning_nom||COLLAB.prenom||'').trim().toLowerCase();
-    rows=rows.filter(r=>String(r.prenom||'').trim().toLowerCase()===cle);
+    /* Même normalisation que Demandes (ipNormStr) et que la règle RLS
+       (kk_norm_prenom) : sans accents, casse, tirets ni espaces multiples. */
+    const norm=s=>String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/œ/g,'o').replace(/-/g,' ').replace(/\s+/g,' ').trim();
+    const cle=norm(COLLAB.planning_nom||COLLAB.prenom);
+    rows=rows.filter(r=>norm(r.prenom)===cle);
   }
   const auj=jourIndexAujourdhui();
   const htmlJour=idx=>{
