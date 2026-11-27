@@ -271,7 +271,7 @@ nettoyages: `
 
 <div style="font-weight:700;font-size:14px;margin-bottom:12px;color:var(--ink)">✅ Noter un nettoyage (toute l'équipe)</div>
 <ol style="font-size:13px;line-height:2;color:var(--ink2);padding-left:20px;margin-bottom:20px">
-  <li>Ouvrez l'onglet <strong>Nettoyages</strong> : le plan de votre crèche est organisé en <strong>Jeux et jouets</strong> et <strong>Espaces et mobilier</strong></li>
+  <li>Ouvrez l'onglet <strong>Nettoyages</strong> : le plan de votre crèche est organisé en <strong>Jeux et jouets</strong> et <strong>Espaces et mobilier</strong>, chacun classé par <strong>fréquence</strong> (après chaque usage, chaque jour, chaque semaine, chaque mois)</li>
   <li>Cliquez sur <strong>✓ Fait</strong> en face de la ligne nettoyée : la date, votre nom et l'heure sont enregistrés</li>
   <li>Le bouton <strong>…</strong> permet d'indiquer <strong>qui a fait le nettoyage</strong> (nom prérempli avec votre compte, à corriger si quelqu'un d'autre l'a fait ; le bouton ✓ Fait enregistre directement le nom de votre compte), le <strong>produit utilisé</strong> (proposé depuis les articles « Entretien » du stock), une observation, ou une date des 7 derniers jours</li>
   <li>Une pastille indique l'état de la période en cours : <strong>Fait</strong>, <strong>À faire aujourd'hui / cette semaine / ce mois-ci</strong> ou le nombre de nettoyages pour les lignes « après chaque usage »</li>
@@ -286,7 +286,7 @@ nettoyages: `
 
 <div style="font-weight:700;font-size:14px;margin-bottom:12px;color:var(--ink)">📋 Registre et export</div>
 <ul style="font-size:13px;line-height:2;color:var(--ink2);padding-left:20px;margin-bottom:20px">
-  <li>Le registre liste les nettoyages des 7 à 62 derniers jours ; <strong>⬇ Exporter (12 mois)</strong> produit un fichier CSV</li>
+  <li>Le registre liste les nettoyages des 7 à 62 derniers jours ; <strong>⬇ Exporter (12 mois)</strong> produit un fichier CSV, classé par type (jeux, puis espaces) puis par fréquence</li>
   <li>Une ligne du registre <strong>ne se modifie pas</strong>. En cas d'erreur de clic, la personne qui l'a noté peut la retirer pendant <strong>15 minutes</strong> (bouton ✕) ; au-delà, seule la direction le peut</li>
   <li>Le bouton <strong>🍽️ Plan de maîtrise sanitaire</strong> ouvre le PMS, où la crèche choisie affiche son plan et son registre, et les exporte dans le PDF</li>
 </ul>
