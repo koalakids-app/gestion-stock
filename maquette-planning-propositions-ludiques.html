@@ -101,7 +101,7 @@ select,input[type=text],textarea{font:inherit;border:1px solid var(--border);bor
 
 <header>
   <a class="back" href="ludotheque.html">← Ludothèque</a>
-  <h1>📅 Planning des propositions ludiques<small>Les propositions créées par l'équipe, 4 par jour maximum, du lundi au vendredi</small></h1>
+  <h1>📅 Planning des propositions ludiques<small>Les propositions de toutes les crèches, 4 par jour maximum, du lundi au vendredi</small></h1>
 </header>
 
 <div class="tabs">
@@ -127,10 +127,14 @@ select,input[type=text],textarea{font:inherit;border:1px solid var(--border);bor
 <div class="layout">
   <aside class="biblio">
     <h2>🧸 Propositions de l'équipe</h2>
+    <select id="fCreche" title="Filtrer par crèche" style="width:100%;margin-bottom:8px">
+      <option value="all">Toutes les crèches</option>
+      <option>Ollioules</option><option>Brunet</option><option>Cuers</option><option>St Jean</option><option>Picot 1</option><option>Picot 2</option>
+    </select>
     <input type="text" id="rech" placeholder="Rechercher une proposition…">
     <div class="chips" id="chips"></div>
     <div class="liste" id="biblio"></div>
-    <div class="aide">Une proposition peut être programmée plusieurs fois dans la semaine ; elle est grisée quand elle y figure déjà.</div>
+    <div class="aide">Les propositions de toutes les crèches sont disponibles (filtre ci-dessus). Une proposition peut être programmée plusieurs fois dans la semaine ; elle est grisée quand elle y figure déjà.</div>
   </aside>
   <main>
     <div class="semaine" id="semaine"></div>
@@ -175,7 +179,7 @@ const PROPS = [
   {id:14,nom:'Empilage de gobelets',cat:'Construction',par:'Équipe Brunet'},
   {id:15,nom:'Bouteilles sensorielles',cat:'Sensoriel',par:'Équipe Cuers'},
   {id:16,nom:'Rangement des animaux de la ferme',cat:'Rangement',par:'Équipe Picot 2'}
-].map(p=>({...p,ic:CATS[p.cat][0],c:CATS[p.cat][1]}));
+].map(p=>({...p,creche:p.par.replace('Équipe ',''),ic:CATS[p.cat][0],c:CATS[p.cat][1]}));
 const parId = id => PROPS.find(p=>p.id===id);
 
 /* semaine courante = lundi */
@@ -198,7 +202,7 @@ function sem(){
   ]}};
 })();
 
-let filtre='all', dragId=null, dragSrc=null, cible=null;
+let filtre='all', filtreCreche='all', dragId=null, dragSrc=null, cible=null;
 
 function toast(t){const e=document.getElementById('toast');e.textContent=t;e.classList.add('on');clearTimeout(toast.t);toast.t=setTimeout(()=>e.classList.remove('on'),2200)}
 
@@ -213,7 +217,7 @@ function deplacer(j,i,d){const a=sem().jours[j];const n=i+d;if(n<0||n>=a.length)
 function carteBiblio(p,deja,action){
   return `<div class="prop ${deja?'deja':''}" style="--c:${p.c}" draggable="true" data-id="${p.id}" ${action||''}>
     <span class="ic">${p.ic}</span>
-    <div><div class="nom">${p.nom}</div><div class="meta">${p.cat} · ${p.par}</div></div>
+    <div><div class="nom">${p.nom}</div><div class="meta">${p.cat} · <b>${p.creche}</b></div></div>
   </div>`;
 }
 
@@ -222,7 +226,7 @@ function rendreBiblio(){
   const s=sem(), planifies=new Set(s.jours.flat().map(x=>x.id));
   document.getElementById('chips').innerHTML=
     ['all',...Object.keys(CATS)].map(c=>`<button class="chip ${filtre===c?'on':''}" data-c="${c}">${c==='all'?'Tout':CATS[c][0]+' '+c}</button>`).join('');
-  const l=PROPS.filter(p=>(filtre==='all'||p.cat===filtre)&&p.nom.toLowerCase().includes(q));
+  const l=PROPS.filter(p=>(filtre==='all'||p.cat===filtre)&&(filtreCreche==='all'||p.creche===filtreCreche)&&p.nom.toLowerCase().includes(q));
   document.getElementById('biblio').innerHTML=l.map(p=>carteBiblio(p,planifies.has(p.id))).join('')||'<div class="aide">Aucune proposition.</div>';
 }
 
@@ -236,7 +240,7 @@ function rendreSemaine(){
     const cartes=a.map((x,i)=>{const p=parId(x.id);return `<div class="carte" style="--c:${p.c}" draggable="true" data-j="${j}" data-i="${i}">
       <button class="x" title="Retirer" data-act="x" data-j="${j}" data-i="${i}">✕</button>
       <div class="n">PROPOSITION ${i+1}</div>
-      <div class="nom">${p.ic} ${p.nom}</div><div class="cat">${p.cat}</div>
+      <div class="nom">${p.ic} ${p.nom}</div><div class="cat">${p.cat} · ${p.creche}</div>
       <input class="note" type="text" placeholder="Note (groupe, lieu, matériel…)" value="${(x.note||'').replace(/"/g,'&quot;')}" data-j="${j}" data-i="${i}">
       <div class="mv"><button data-act="up" data-j="${j}" data-i="${i}">↑</button><button data-act="down" data-j="${j}" data-i="${i}">↓</button></div>
     </div>`}).join('');
@@ -265,6 +269,7 @@ function rendre(){rendreBiblio();rendreSemaine();rendreRecap()}
 
 /* événements */
 document.getElementById('rech').oninput=rendreBiblio;
+document.getElementById('fCreche').onchange=e=>{filtreCreche=e.target.value;rendreBiblio()};
 document.getElementById('chips').onclick=e=>{const c=e.target.closest('[data-c]');if(c){filtre=c.dataset.c;rendreBiblio()}};
 document.getElementById('creche').onchange=rendre;
 document.getElementById('prec').onclick=()=>{debut.setDate(debut.getDate()-7);rendre()};
@@ -322,7 +327,7 @@ function ouvrir(j){jourCible=j;document.getElementById('ovTitre').textContent='A
 function fermer(){document.getElementById('ov').classList.remove('on')}
 function listeOv(){
   const q=document.getElementById('ovRech').value.toLowerCase();
-  document.getElementById('ovListe').innerHTML=PROPS.filter(p=>p.nom.toLowerCase().includes(q)).map(p=>carteBiblio(p,false,'onclick="choisir('+p.id+')"')).join('');
+  document.getElementById('ovListe').innerHTML=PROPS.filter(p=>(filtreCreche==='all'||p.creche===filtreCreche)&&p.nom.toLowerCase().includes(q)).map(p=>carteBiblio(p,false,'onclick="choisir('+p.id+')"')).join('');
 }
 document.getElementById('ovRech').oninput=listeOv;
 function choisir(id){if(ajouter(jourCible,id))fermer()}
