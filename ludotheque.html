@@ -66,6 +66,7 @@
   <!-- Onglets internes -->
   <div style="display:flex;gap:0;border-bottom:2px solid var(--border);margin-bottom:20px">
     <button class="ludo-tab-btn active" id="ltab-propositions" onclick="showLudoTab('propositions', this)">🧸 Propositions</button>
+    <button class="ludo-tab-btn" id="ltab-planning" onclick="showLudoTab('planning', this)">📅 Planning</button>
     <button class="ludo-tab-btn" id="ltab-souscats" onclick="showLudoTab('souscats', this)">🏷 Sous-catégories</button>
   </div>
 
@@ -88,6 +89,39 @@
       <div id="proposition-subcat-filters"></div>
     </div>
     <div id="proposition-list" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px"></div>
+  </div>
+
+  <!-- Onglet Planning des propositions ludiques -->
+  <div id="ltab-content-planning" style="display:none">
+    <div class="section-header">
+      <div class="section-title">Planning des propositions ludiques</div>
+    </div>
+    <div class="plp-barre">
+      <div class="plp-sem">
+        <button type="button" id="plp-prec" title="Semaine précédente">‹</button>
+        <b id="plp-libelle"></b>
+        <button type="button" id="plp-suiv" title="Semaine suivante">›</button>
+      </div>
+      <button type="button" class="btn btn-secondary btn-sm" id="plp-auj">Cette semaine</button>
+      <select id="plp-creche" title="Crèche dont on construit le planning"></select>
+      <span style="flex:1"></span>
+      <button type="button" class="btn btn-secondary btn-sm" id="plp-copier" title="Reprendre le planning de la semaine précédente">⧉ Copier la semaine précédente</button>
+      <button type="button" class="btn btn-secondary btn-sm" id="plp-vider">🗑 Vider</button>
+      <button type="button" class="btn btn-primary btn-sm" id="plp-imprimer">🖨 Imprimer / PDF</button>
+    </div>
+    <div id="plp-lecture" class="plp-lecture" style="display:none"></div>
+    <div class="plp-layout">
+      <aside class="plp-biblio">
+        <h3>🧸 Propositions de toutes les crèches</h3>
+        <select id="plp-f-creche" title="Filtrer par crèche"></select>
+        <input type="text" id="plp-rech" placeholder="Rechercher une proposition…">
+        <div class="plp-chips" id="plp-chips"></div>
+        <div class="plp-liste" id="plp-biblio"></div>
+        <div class="plp-aide">4 propositions maximum par jour, du lundi au vendredi. Glissez une proposition dans un jour, cliquez dessus (jour libre suivant) ou sur « ＋ Ajouter » dans un jour. Une proposition peut être programmée plusieurs fois ; elle est grisée quand elle figure déjà dans la semaine.</div>
+      </aside>
+      <main><div class="plp-semaine" id="plp-semaine"></div></main>
+    </div>
+    <div class="plp-recap" id="plp-recap"></div>
   </div>
 
   <!-- Onglet Sous-catégories -->
@@ -238,10 +272,25 @@
   </div>
 </div>
 
+<!-- ── MODAL CHOIX D'UNE PROPOSITION (planning) ── -->
+<div class="modal-overlay" id="modal-plp-picker" onclick="closeModalClick(event,'modal-plp-picker')">
+  <div class="modal" style="max-width:520px">
+    <div class="modal-header">
+      <h2 id="plp-picker-titre">Ajouter une proposition</h2>
+      <button class="modal-close" onclick="closeModal('modal-plp-picker')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="text" id="plp-picker-rech" placeholder="Rechercher…" style="width:100%;margin-bottom:10px">
+      <div id="plp-picker-liste" class="plp-liste" style="max-height:55vh;overflow:auto"></div>
+    </div>
+  </div>
+</div>
+
 <!-- NOTIFICATION -->
 <div class="notif" id="notif"></div>
 
 <script src="js/pages/ludotheque.js"></script>
+<script src="js/pages/ludotheque-planning.js"></script>
 <script src="js/garde-modales.js"></script>
 <script src="js/portail-bouton.js?v=1"></script>
 </body>
