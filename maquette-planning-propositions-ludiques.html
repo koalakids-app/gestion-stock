@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Maquette — Planning des propositions ludiques</title>
+<style>
+:root{--bg:#F0EDE8;--surface:#FAFAF8;--white:#fff;--ink:#1C1917;--ink2:#57534E;--ink3:#A8A29E;--border:#E7E5E0;--accent:#2563EB;--accent-lt:#EFF6FF;--green:#16A34A;--amber:#D97706;--red:#DC2626;--violet:#2A2460;--orange:#F47920;--shadow:0 1px 3px rgba(0,0,0,.06),0 4px 12px rgba(0,0,0,.04);--r:12px}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Instrument Sans',system-ui,-apple-system,"Segoe UI",sans-serif;background:var(--bg);color:var(--ink);font-size:14px;min-height:100dvh}
+button{font:inherit;cursor:pointer}
+.bandeau{background:#fff8e1;border-bottom:1px solid #f2dc8a;color:#7a5b00;font-size:12px;padding:6px 16px;text-align:center}
+header{background:linear-gradient(135deg,#2A2460,#3D3580 60%,#F47920);color:#fff;padding:14px 20px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+header h1{font-size:19px;font-weight:800;flex:1;min-width:220px}
+header small{display:block;font-weight:400;font-size:12px;opacity:.85;margin-top:2px}
+.back{color:#fff;text-decoration:none;background:rgba(255,255,255,.15);padding:6px 12px;border-radius:8px;font-size:12.5px;font-weight:600}
+.tabs{display:flex;border-bottom:2px solid var(--border);margin:16px 20px 0;overflow-x:auto}
+.tabs button{border:0;background:none;padding:10px 16px;font-weight:600;color:var(--ink2);border-bottom:3px solid transparent;margin-bottom:-2px;white-space:nowrap}
+.tabs button.on{color:var(--accent);border-color:var(--accent)}
+.barre{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:14px 20px}
+.barre .sem{display:flex;align-items:center;gap:6px;background:var(--white);border:1px solid var(--border);border-radius:30px;padding:3px}
+.barre .sem button{border:0;background:none;width:32px;height:32px;border-radius:50%;font-size:16px}
+.barre .sem button:hover{background:var(--accent-lt)}
+.barre .sem b{padding:0 8px;min-width:200px;text-align:center;font-size:14px}
+select,input[type=text],textarea{font:inherit;border:1px solid var(--border);border-radius:8px;padding:8px 10px;background:var(--white);color:var(--ink)}
+.btn{border:1px solid var(--border);background:var(--white);border-radius:8px;padding:8px 13px;font-weight:600;color:var(--ink)}
+.btn:hover{border-color:var(--accent);color:var(--accent)}
+.btn.p{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.p:hover{filter:brightness(1.08);color:#fff}
+.sp{flex:1}
+.etat{font-size:12.5px;padding:5px 11px;border-radius:20px;font-weight:600}
+.etat.brouillon{background:#FFFBEB;color:var(--amber)}
+.etat.publie{background:#F0FDF4;color:var(--green)}
+.layout{display:grid;grid-template-columns:290px 1fr;gap:16px;padding:0 20px 28px;align-items:start}
+@media(max-width:1000px){.layout{grid-template-columns:1fr}.biblio{order:2}}
+/* bibliothèque */
+.biblio{background:var(--white);border:1px solid var(--border);border-radius:var(--r);box-shadow:var(--shadow);padding:12px;position:sticky;top:10px;max-height:calc(100dvh - 20px);display:flex;flex-direction:column}
+.biblio h2{font-size:14px;margin-bottom:8px}
+.biblio input[type=text]{width:100%;margin-bottom:8px}
+.chips{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px}
+.chip{border:1px solid var(--border);background:var(--surface);border-radius:20px;padding:3px 9px;font-size:11.5px;color:var(--ink2)}
+.chip.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.liste{overflow:auto;display:flex;flex-direction:column;gap:7px;padding:2px}
+.aide{font-size:11.5px;color:var(--ink3);margin-top:8px}
+/* carte proposition */
+.prop{border:1px solid var(--border);border-left:5px solid var(--c,#888);border-radius:9px;background:var(--white);padding:8px 10px;display:flex;gap:9px;align-items:flex-start;cursor:grab}
+.prop:active{cursor:grabbing}
+.prop .ic{font-size:21px;line-height:1.1}
+.prop .nom{font-weight:600;font-size:13px;line-height:1.25}
+.prop .meta{font-size:11px;color:var(--ink3);margin-top:2px}
+.prop.deja{opacity:.5}
+.prop .add{margin-left:auto;border:0;background:var(--accent-lt);color:var(--accent);border-radius:7px;width:26px;height:26px;font-weight:700;flex:none}
+/* semaine */
+.semaine{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px}
+@media(max-width:1200px){.semaine{grid-template-columns:repeat(5,minmax(170px,1fr));overflow-x:auto;padding-bottom:6px}}
+.jour{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:9px;display:flex;flex-direction:column;gap:7px;min-height:420px}
+.jour.survol{outline:2px dashed var(--accent);background:var(--accent-lt)}
+.jour.aujourdhui{border-color:var(--orange);box-shadow:0 0 0 2px #F4792033}
+.jh{display:flex;align-items:baseline;gap:6px}
+.jh b{font-size:14px}
+.jh span{font-size:12px;color:var(--ink3)}
+.cpt{margin-left:auto;font-size:11.5px;font-weight:700;padding:2px 8px;border-radius:12px;background:var(--border);color:var(--ink2)}
+.cpt.plein{background:#F0FDF4;color:var(--green)}
+.slot{min-height:86px;border:2px dashed var(--border);border-radius:10px;display:flex;align-items:center;justify-content:center;color:var(--ink3);font-size:12px;background:rgba(255,255,255,.5);text-align:center;padding:6px}
+.slot:hover{border-color:var(--accent);color:var(--accent);background:var(--accent-lt);cursor:pointer}
+.slot.cache{display:none}
+.carte{background:var(--white);border:1px solid var(--border);border-top:5px solid var(--c,#888);border-radius:10px;padding:8px 9px;box-shadow:var(--shadow);cursor:grab;position:relative}
+.carte .n{font-size:10.5px;font-weight:800;color:var(--ink3);letter-spacing:.04em}
+.carte .nom{font-weight:700;font-size:13px;margin:2px 22px 3px 0;line-height:1.25}
+.carte .cat{font-size:11px;color:var(--ink2)}
+.carte .note{margin-top:5px;font-size:11.5px;color:var(--ink2);background:var(--surface);border-radius:6px;padding:4px 6px;width:100%;border:1px dashed var(--border);resize:none}
+.carte .x{position:absolute;top:5px;right:5px;border:0;background:none;color:var(--ink3);font-size:15px;width:22px;height:22px;border-radius:6px}
+.carte .x:hover{background:#FEF2F2;color:var(--red)}
+.carte .mv{display:flex;gap:4px;margin-top:5px}
+.carte .mv button{border:1px solid var(--border);background:var(--surface);border-radius:6px;font-size:11px;padding:1px 7px;color:var(--ink2)}
+.carte.drag{opacity:.35}
+.limite{font-size:11.5px;color:var(--ink3);text-align:center}
+/* récap */
+.recap{margin:0 20px 24px;background:var(--white);border:1px solid var(--border);border-radius:var(--r);padding:12px 16px;display:flex;gap:22px;flex-wrap:wrap;align-items:center;box-shadow:var(--shadow)}
+.recap div{font-size:12.5px;color:var(--ink2)}
+.recap b{font-size:18px;color:var(--ink);display:block}
+.barres{display:flex;gap:6px;flex-wrap:wrap;flex:1;min-width:240px}
+.barres span{font-size:11.5px;border-radius:14px;padding:3px 9px;background:var(--surface);border:1px solid var(--border)}
+.barres i{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:5px;background:var(--c)}
+/* modale */
+.ov{position:fixed;inset:0;background:rgba(20,16,40,.5);display:none;align-items:center;justify-content:center;padding:16px;z-index:50}
+.ov.on{display:flex}
+.modal{background:var(--white);border-radius:16px;width:100%;max-width:520px;max-height:88dvh;display:flex;flex-direction:column;box-shadow:var(--shadow-lg,0 8px 32px rgba(0,0,0,.2))}
+.modal header{background:none;color:var(--ink);padding:14px 16px;border-bottom:1px solid var(--border)}
+.modal header h1{font-size:16px}
+.modal .corps{padding:12px 16px;overflow:auto;display:flex;flex-direction:column;gap:7px}
+.modal .corps input{width:100%}
+.modal .x{border:0;background:none;font-size:18px}
+.toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;padding:9px 16px;border-radius:24px;font-size:13px;opacity:0;pointer-events:none;transition:.25s;z-index:60;max-width:90vw}
+.toast.on{opacity:1}
+@media print{.bandeau,header,.tabs,.barre,.biblio,.recap,.slot,.carte .x,.carte .mv,.cpt{display:none!important}.layout{display:block;padding:0}.semaine{gap:6px}.jour{min-height:0;break-inside:avoid}body{background:#fff}.carte{box-shadow:none}.carte .note{border:0;background:none}}
+</style>
+</head>
+<body>
+<div class="bandeau">Maquette — données d'exemple, rien n'est enregistré. Glissez une proposition dans un jour, ou cliquez sur « + » / un emplacement vide.</div>
+
+<header>
+  <a class="back" href="ludotheque.html">← Ludothèque</a>
+  <h1>📅 Planning des propositions ludiques<small>Les propositions de toutes les crèches, 4 par jour maximum, du lundi au vendredi</small></h1>
+</header>
+
+<div class="tabs">
+  <button>🧸 Propositions</button>
+  <button class="on">📅 Planning</button>
+  <button>🏷 Sous-catégories</button>
+</div>
+
+<div class="barre">
+  <div class="sem"><button id="prec" title="Semaine précédente">‹</button><b id="libSem"></b><button id="suiv" title="Semaine suivante">›</button></div>
+  <button class="btn" id="auj">Cette semaine</button>
+  <select id="creche" title="Crèche">
+    <option>Ollioules</option><option>Brunet</option><option>Cuers</option><option>St Jean</option><option>Picot 1</option><option>Picot 2</option>
+  </select>
+  <span class="sp"></span>
+  <span class="etat brouillon" id="etat">Brouillon</span>
+  <button class="btn" id="copier" title="Reprendre le planning de la semaine précédente">⧉ Copier la semaine précédente</button>
+  <button class="btn" id="vider">🗑 Vider</button>
+  <button class="btn" onclick="window.print()">🖨 Imprimer / PDF</button>
+  <button class="btn p" id="publier">📣 Partager à l'équipe</button>
+</div>
+
+<div class="layout">
+  <aside class="biblio">
+    <h2>🧸 Propositions de l'équipe</h2>
+    <select id="fCreche" title="Filtrer par crèche" style="width:100%;margin-bottom:8px">
+      <option value="all">Toutes les crèches</option>
+      <option>Ollioules</option><option>Brunet</option><option>Cuers</option><option>St Jean</option><option>Picot 1</option><option>Picot 2</option>
+    </select>
+    <input type="text" id="rech" placeholder="Rechercher une proposition…">
+    <div class="chips" id="chips"></div>
+    <div class="liste" id="biblio"></div>
+    <div class="aide">Les propositions de toutes les crèches sont disponibles (filtre ci-dessus). Une proposition peut être programmée plusieurs fois dans la semaine ; elle est grisée quand elle y figure déjà.</div>
+  </aside>
+  <main>
+    <div class="semaine" id="semaine"></div>
+  </main>
+</div>
+
+<div class="recap" id="recap"></div>
+
+<div class="ov" id="ov" onclick="if(event.target===this)fermer()">
+  <div class="modal">
+    <header><h1 id="ovTitre">Ajouter une proposition</h1><button class="x" onclick="fermer()">✕</button></header>
+    <div class="corps">
+      <input type="text" id="ovRech" placeholder="Rechercher…">
+      <div id="ovListe" style="display:flex;flex-direction:column;gap:7px"></div>
+    </div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const MAX = 4;
+const JOURS = ['Lundi','Mardi','Mercredi','Jeudi','Vendredi'];
+const CATS = {
+  'Sensoriel':['👂','#7C3AED'],'Manipulation':['🤲','#D97706'],'Construction':['🧱','#2563EB'],
+  'Motricité':['🏃','#16A34A'],'Imitation':['🎭','#DB2777'],'Expression artistique':['🎨','#F47920'],
+  'Rangement':['🗂','#0891B2'],'Décoration':['🎀','#A21CAF']
+};
+const PROPS = [
+  {id:1,nom:'Bac sensoriel automne',cat:'Sensoriel',par:'Équipe Ollioules'},
+  {id:2,nom:'Parcours de motricité en mousse',cat:'Motricité',par:'Équipe Brunet'},
+  {id:3,nom:'Tour de cubes en carton',cat:'Construction',par:'Équipe Cuers'},
+  {id:4,nom:'Transvasement de pâtes et lentilles',cat:'Manipulation',par:'Équipe Ollioules'},
+  {id:5,nom:'Coin cuisine — dînette',cat:'Imitation',par:'Équipe St Jean'},
+  {id:6,nom:'Peinture aux éponges',cat:'Expression artistique',par:'Équipe Ollioules'},
+  {id:7,nom:'Boîte à trésors',cat:'Sensoriel',par:'Équipe Picot 1'},
+  {id:8,nom:'Tri des couleurs avec pinces',cat:'Rangement',par:'Équipe Brunet'},
+  {id:9,nom:'Pâte à modeler maison',cat:'Manipulation',par:'Équipe Cuers'},
+  {id:10,nom:'Poupées et petits soins',cat:'Imitation',par:'Équipe Picot 2'},
+  {id:11,nom:'Fresque de feuilles mortes',cat:'Décoration',par:'Équipe Ollioules'},
+  {id:12,nom:'Tunnel et petits ponts',cat:'Motricité',par:'Équipe St Jean'},
+  {id:13,nom:'Collage de gommettes',cat:'Expression artistique',par:'Équipe Picot 1'},
+  {id:14,nom:'Empilage de gobelets',cat:'Construction',par:'Équipe Brunet'},
+  {id:15,nom:'Bouteilles sensorielles',cat:'Sensoriel',par:'Équipe Cuers'},
+  {id:16,nom:'Rangement des animaux de la ferme',cat:'Rangement',par:'Équipe Picot 2'}
+].map(p=>({...p,creche:p.par.replace('Équipe ',''),ic:CATS[p.cat][0],c:CATS[p.cat][1]}));
+const parId = id => PROPS.find(p=>p.id===id);
+
+/* semaine courante = lundi */
+function lundi(d){d=new Date(d);const j=(d.getDay()+6)%7;d.setDate(d.getDate()-j);d.setHours(0,0,0,0);return d}
+let debut = lundi(new Date());
+const cle = d => d.toISOString().slice(0,10);
+const fmt = (d,o)=>d.toLocaleDateString('fr-FR',o);
+/* planning[crèche][lundi] = {publie, jours:[[{id,note}...]*5]} */
+const PLAN = {};
+function sem(){
+  const c=document.getElementById('creche').value;
+  PLAN[c]=PLAN[c]||{};
+  return PLAN[c][cle(debut)]=PLAN[c][cle(debut)]||{publie:false,jours:[[],[],[],[],[]]};
+}
+/* exemple de départ */
+(function(){
+  const c='Ollioules',k=cle(debut);
+  PLAN[c]={[k]:{publie:false,jours:[
+    [{id:1},{id:4},{id:6}],[{id:2},{id:5}],[{id:3},{id:9},{id:11},{id:15}],[{id:12},{id:13}],[{id:7},{id:8,note:'Avec les grands'}]
+  ]}};
+})();
+
+let filtre='all', filtreCreche='all', dragId=null, dragSrc=null, cible=null;
+
+function toast(t){const e=document.getElementById('toast');e.textContent=t;e.classList.add('on');clearTimeout(toast.t);toast.t=setTimeout(()=>e.classList.remove('on'),2200)}
+
+function ajouter(j,id){
+  const s=sem();
+  if(s.jours[j].length>=MAX){toast('⚠ '+JOURS[j]+' est complet : '+MAX+' propositions maximum');return false}
+  s.jours[j].push({id});s.publie=false;rendre();return true;
+}
+function retirer(j,i){const s=sem();s.jours[j].splice(i,1);s.publie=false;rendre()}
+function deplacer(j,i,d){const a=sem().jours[j];const n=i+d;if(n<0||n>=a.length)return;[a[i],a[n]]=[a[n],a[i]];sem().publie=false;rendre()}
+
+function carteBiblio(p,deja,action){
+  return `<div class="prop ${deja?'deja':''}" style="--c:${p.c}" draggable="true" data-id="${p.id}" ${action||''}>
+    <span class="ic">${p.ic}</span>
+    <div><div class="nom">${p.nom}</div><div class="meta">${p.cat} · <b>${p.creche}</b></div></div>
+  </div>`;
+}
+
+function rendreBiblio(){
+  const q=document.getElementById('rech').value.toLowerCase();
+  const s=sem(), planifies=new Set(s.jours.flat().map(x=>x.id));
+  document.getElementById('chips').innerHTML=
+    ['all',...Object.keys(CATS)].map(c=>`<button class="chip ${filtre===c?'on':''}" data-c="${c}">${c==='all'?'Tout':CATS[c][0]+' '+c}</button>`).join('');
+  const l=PROPS.filter(p=>(filtre==='all'||p.cat===filtre)&&(filtreCreche==='all'||p.creche===filtreCreche)&&p.nom.toLowerCase().includes(q));
+  document.getElementById('biblio').innerHTML=l.map(p=>carteBiblio(p,planifies.has(p.id))).join('')||'<div class="aide">Aucune proposition.</div>';
+}
+
+function rendreSemaine(){
+  const s=sem(), auj=cle(new Date());
+  const fin=new Date(debut);fin.setDate(fin.getDate()+4);
+  document.getElementById('libSem').textContent='Du '+fmt(debut,{day:'numeric',month:'long'})+' au '+fmt(fin,{day:'numeric',month:'long',year:'numeric'});
+  document.getElementById('semaine').innerHTML=JOURS.map((n,j)=>{
+    const d=new Date(debut);d.setDate(d.getDate()+j);
+    const a=s.jours[j];
+    const cartes=a.map((x,i)=>{const p=parId(x.id);return `<div class="carte" style="--c:${p.c}" draggable="true" data-j="${j}" data-i="${i}">
+      <button class="x" title="Retirer" data-act="x" data-j="${j}" data-i="${i}">✕</button>
+      <div class="n">PROPOSITION ${i+1}</div>
+      <div class="nom">${p.ic} ${p.nom}</div><div class="cat">${p.cat} · ${p.creche}</div>
+      <input class="note" type="text" placeholder="Note (groupe, lieu, matériel…)" value="${(x.note||'').replace(/"/g,'&quot;')}" data-j="${j}" data-i="${i}">
+      <div class="mv"><button data-act="up" data-j="${j}" data-i="${i}">↑</button><button data-act="down" data-j="${j}" data-i="${i}">↓</button></div>
+    </div>`}).join('');
+    const vides=Array.from({length:MAX-a.length},(_,k)=>`<div class="slot ${k?'cache':''}" data-add="${j}">＋ Ajouter une proposition</div>`).join('');
+    return `<section class="jour ${cle(d)===auj?'aujourdhui':''}" data-jour="${j}">
+      <div class="jh"><b>${n}</b><span>${fmt(d,{day:'numeric',month:'short'})}</span><span class="cpt ${a.length===MAX?'plein':''}">${a.length}/${MAX}</span></div>
+      ${cartes}${vides}
+      ${a.length===MAX?'<div class="limite">Journée complète</div>':''}
+    </section>`}).join('');
+}
+
+function rendreRecap(){
+  const s=sem(), tous=s.jours.flat();
+  const par={};tous.forEach(x=>{const p=parId(x.id);par[p.cat]=(par[p.cat]||0)+1});
+  const jr=s.jours.filter(a=>a.length).length;
+  document.getElementById('recap').innerHTML=
+   `<div><b>${tous.length} / ${MAX*5}</b>propositions planifiées</div>
+    <div><b>${jr} / 5</b>jours renseignés</div>
+    <div><b>${new Set(tous.map(x=>x.id)).size}</b>propositions différentes</div>
+    <div class="barres">${Object.entries(par).sort((a,b)=>b[1]-a[1]).map(([c,n])=>`<span><i style="--c:${CATS[c][1]}"></i>${CATS[c][0]} ${c} · ${n}</span>`).join('')||'<span>Équilibre des catégories : rien de planifié</span>'}</div>`;
+  const e=document.getElementById('etat');
+  e.textContent=s.publie?'Partagé à l\'équipe':'Brouillon';e.className='etat '+(s.publie?'publie':'brouillon');
+}
+
+function rendre(){rendreBiblio();rendreSemaine();rendreRecap()}
+
+/* événements */
+document.getElementById('rech').oninput=rendreBiblio;
+document.getElementById('fCreche').onchange=e=>{filtreCreche=e.target.value;rendreBiblio()};
+document.getElementById('chips').onclick=e=>{const c=e.target.closest('[data-c]');if(c){filtre=c.dataset.c;rendreBiblio()}};
+document.getElementById('creche').onchange=rendre;
+document.getElementById('prec').onclick=()=>{debut.setDate(debut.getDate()-7);rendre()};
+document.getElementById('suiv').onclick=()=>{debut.setDate(debut.getDate()+7);rendre()};
+document.getElementById('auj').onclick=()=>{debut=lundi(new Date());rendre()};
+document.getElementById('vider').onclick=()=>{if(confirm('Vider le planning de cette semaine ?')){const s=sem();s.jours=[[],[],[],[],[]];s.publie=false;rendre()}};
+document.getElementById('copier').onclick=()=>{
+  const c=document.getElementById('creche').value, p=new Date(debut);p.setDate(p.getDate()-7);
+  const src=(PLAN[c]||{})[cle(p)];
+  if(!src||!src.jours.flat().length){toast('Rien à copier : la semaine précédente est vide');return}
+  const s=sem();s.jours=src.jours.map(a=>a.map(x=>({id:x.id})));s.publie=false;rendre();toast('Semaine précédente copiée');
+};
+document.getElementById('publier').onclick=()=>{const s=sem();if(!s.jours.flat().length){toast('Le planning est vide');return}s.publie=true;rendre();toast('✓ Planning partagé à l\'équipe (notification envoyée)')};
+
+document.getElementById('semaine').addEventListener('click',e=>{
+  const b=e.target.closest('[data-act]');
+  if(b){const j=+b.dataset.j,i=+b.dataset.i;({x:()=>retirer(j,i),up:()=>deplacer(j,i,-1),down:()=>deplacer(j,i,1)})[b.dataset.act]();return}
+  const a=e.target.closest('[data-add]');if(a)ouvrir(+a.dataset.add);
+});
+document.getElementById('semaine').addEventListener('change',e=>{
+  if(e.target.classList.contains('note')){sem().jours[+e.target.dataset.j][+e.target.dataset.i].note=e.target.value;sem().publie=false;rendreRecap()}
+});
+document.getElementById('biblio').addEventListener('click',e=>{
+  const p=e.target.closest('.prop');if(!p)return;
+  const j=[...sem().jours].findIndex(a=>a.length<MAX);
+  if(j<0){toast('⚠ Toute la semaine est complète');return}
+  if(ajouter(j,+p.dataset.id))toast('Ajouté à '+JOURS[j].toLowerCase());
+});
+
+/* glisser-déposer */
+document.addEventListener('dragstart',e=>{
+  const c=e.target.closest('.carte'),p=e.target.closest('.prop');
+  if(c){dragSrc={j:+c.dataset.j,i:+c.dataset.i};dragId=null;c.classList.add('drag')}
+  else if(p){dragId=+p.dataset.id;dragSrc=null}
+  e.dataTransfer&&(e.dataTransfer.effectAllowed='move',e.dataTransfer.setData('text/plain','x'));
+});
+document.addEventListener('dragend',()=>{document.querySelectorAll('.drag,.survol').forEach(x=>x.classList.remove('drag','survol'))});
+document.addEventListener('dragover',e=>{const j=e.target.closest('.jour');if(j){e.preventDefault();document.querySelectorAll('.survol').forEach(x=>x.classList.remove('survol'));j.classList.add('survol')}});
+document.addEventListener('drop',e=>{
+  const j=e.target.closest('.jour');if(!j)return;e.preventDefault();
+  const nj=+j.dataset.jour;
+  if(dragId){ajouter(nj,dragId)}
+  else if(dragSrc){
+    if(dragSrc.j===nj){rendre();return}
+    const s=sem();
+    if(s.jours[nj].length>=MAX){toast('⚠ '+JOURS[nj]+' est complet : '+MAX+' propositions maximum');rendre();return}
+    s.jours[nj].push(s.jours[dragSrc.j].splice(dragSrc.i,1)[0]);s.publie=false;rendre();
+  }
+  dragId=dragSrc=null;
+});
+
+/* sélecteur (tablette) */
+let jourCible=0;
+function ouvrir(j){jourCible=j;document.getElementById('ovTitre').textContent='Ajouter — '+JOURS[j];document.getElementById('ovRech').value='';listeOv();document.getElementById('ov').classList.add('on')}
+function fermer(){document.getElementById('ov').classList.remove('on')}
+function listeOv(){
+  const q=document.getElementById('ovRech').value.toLowerCase();
+  document.getElementById('ovListe').innerHTML=PROPS.filter(p=>(filtreCreche==='all'||p.creche===filtreCreche)&&p.nom.toLowerCase().includes(q)).map(p=>carteBiblio(p,false,'onclick="choisir('+p.id+')"')).join('');
+}
+document.getElementById('ovRech').oninput=listeOv;
+function choisir(id){if(ajouter(jourCible,id))fermer()}
+
+rendre();
+</script>
+</body>
+</html>

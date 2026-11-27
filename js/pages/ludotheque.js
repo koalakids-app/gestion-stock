@@ -260,7 +260,7 @@ function filterCreche(creche) {
 
 // ─── ONGLET INTERNE ───────────────────────────────────────────────────────
 function showLudoTab(tab, btn) {
-  ['propositions','souscats'].forEach(t => {
+  ['propositions','planning','souscats'].forEach(t => {
     const el = document.getElementById('ltab-content-' + t);
     if (el) el.style.display = t === tab ? 'block' : 'none';
   });
@@ -268,6 +268,7 @@ function showLudoTab(tab, btn) {
   if (btn) btn.classList.add('active');
   if (tab === 'souscats') renderSouscats();
   if (tab === 'propositions') renderPropositions();
+  if (tab === 'planning' && typeof plpAfficher === 'function') plpAfficher();
 }
 
 // ─── MODALS ───────────────────────────────────────────────────────────────
