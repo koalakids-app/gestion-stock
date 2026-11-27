@@ -163,13 +163,9 @@ async function albRenderAClasser(z) {
   var nbCib = Object.keys(ALB.cibles).length;
   var f = (ALB.filtre || '').toLowerCase();
   var enfants = albEnfants();
-  enfants.sort(function (a, b) {
-    var ra = ALB.recents.indexOf(a.id), rb = ALB.recents.indexOf(b.id);
-    if (ra < 0 && rb < 0) return 0;
-    if (ra < 0) return 1; if (rb < 0) return -1; return ra - rb;
-  });
+  /* ordre alphabétique (albEnfants) : on ne remonte plus le dernier enfant choisi */
   if (f) enfants = enfants.filter(function (e) { return albNom(e).toLowerCase().indexOf(f) >= 0; });
-  var h = '<div class="alb-aide"><i class="ti ti-hand-click"></i> Touchez les photos à classer, puis touchez <b>tous les enfants</b> qui y figurent (une photo de groupe peut aller dans plusieurs albums) et validez avec « Classer ». Les derniers enfants choisis passent en tête.</div>' +
+  var h = '<div class="alb-aide"><i class="ti ti-hand-click"></i> Touchez les photos à classer, puis touchez <b>tous les enfants</b> qui y figurent (une photo de groupe peut aller dans plusieurs albums) et validez avec « Classer ». Les enfants sont classés par ordre alphabétique.</div>' +
     '<div class="alb-barre"><button class="btn-sm" onclick="albToutSel(' + (nbSel === liste.length ? 'false' : 'true') + ')">' + (nbSel === liste.length ? 'Tout désélectionner' : 'Tout sélectionner') + '</button>' +
     '<span class="alb-ct">' + nbSel + ' sélectionnée' + (nbSel > 1 ? 's' : '') + ' sur ' + liste.length + '</span>' +
     '<button class="btn-sm" style="margin-left:auto;color:var(--red);border-color:var(--red)" ' + (nbSel ? '' : 'disabled') + ' onclick="albSupprimerSel()"><i class="ti ti-trash"></i> Supprimer</button></div>' +
