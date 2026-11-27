@@ -219,7 +219,12 @@ function renderNettoyages() {
     ['jeux', 'espace'].forEach(t => {
       const lignes = NETT_PLAN.filter(p => p.type === t);
       if (!lignes.length) return;
-      html += `<div class="nett-groupe"><div class="nett-groupe-titre">${t === 'jeux' ? '🧸' : '🏠'} ${NETT_TYPES[t]}</div>${lignes.map(nettLigneHtml).join('')}</div>`;
+      // Classement par fréquence (du plus fréquent au moins fréquent), ordre du plan conservé dans chaque groupe
+      const parFreq = Object.keys(NETT_FREQ).map(fq => {
+        const l = lignes.filter(p => p.frequence === fq);
+        return l.length ? `<div class="nett-freq-titre" style="padding:8px 20px 2px;font-size:12px;font-weight:700;color:var(--text-2,#666);text-transform:uppercase;letter-spacing:.03em">${NETT_FREQ[fq]} (${l.length})</div>${l.map(nettLigneHtml).join('')}` : '';
+      }).join('');
+      html += `<div class="nett-groupe"><div class="nett-groupe-titre">${t === 'jeux' ? '🧸' : '🏠'} ${NETT_TYPES[t]}</div>${parFreq}</div>`;
     });
     if (nettPeutGerer()) html += '<div style="padding:4px 20px 0"><button class="btn btn-secondary btn-sm" onclick="nettOuvrirPlan()">+ Ajouter une ligne au plan</button></div>';
   }
