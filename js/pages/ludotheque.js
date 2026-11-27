@@ -13,7 +13,7 @@ const CRECHE_PALETTE = ['#F59E0B', '#10B981', '#EF4444', '#8B5CF6', '#0EA5E9', '
 const CAT_ICONS = { 'Sensoriel':'👂','Manipulation':'🤲','Construction':'🧱','Motricité':'🏃','Imitation':'🎭','Expression artistique':'🎨','Mobilier':'🪑','Puériculture':'🍼','Bureautique':'💻','Rangement':'🗂','Décoration':'🎀' };
 const CAT_PROPOSITION_ICONS = {
   'Sensoriel':'👂','Manipulation':'🤲','Construction':'🧱','Motricité':'🏃',
-  'Imitation':'🎭','Expression artistique':'🎨','Rangement':'🗂','Décoration':'🎀','Multi-catégories':'🧸'
+  'Imitation':'🎭','Expression artistique':'🎨','Multi-catégories':'🧸'
 };
 
 let ARTICLES = [];       // lecture seule, chargé depuis Supabase pour les pickers

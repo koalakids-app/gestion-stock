@@ -15,7 +15,7 @@ const PLP_SEMAINES = 'planning_propositions_semaines';
 const PLP_COULEURS = {
   'Sensoriel': '#7C3AED', 'Manipulation': '#D97706', 'Construction': '#2563EB',
   'Motricité': '#16A34A', 'Imitation': '#DB2777', 'Expression artistique': '#F47920',
-  'Rangement': '#0891B2', 'Décoration': '#A21CAF', 'Multi-catégories': '#57534E'
+  'Multi-catégories': '#57534E'
 };
 
 const PLP = {
