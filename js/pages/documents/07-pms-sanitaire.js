@@ -220,8 +220,24 @@ function pmsNettSynthese(d){
     const rec=fait.filter(x=>x.fait_le>=lim);
     const der=fait[0];
     return {type:l.type,libelle:l.libelle,freq:PMS_NETT_FREQ[l.frequence]||l.frequence,methode:l.methode||'',
-      n:rec.length,der:der?new Date(der.fait_le+'T12:00:00').toLocaleDateString('fr-FR'):'aucun',par:der?(der.fait_par||'non renseigné'):'—'};
+      n:rec.length,der:der?new Date(der.fait_le+'T12:00:00').toLocaleDateString('fr-FR'):'aucun',par:der?(der.fait_par||'non renseigné'):'—',
+      prod:pmsNettProduits(rec).map(p=>p.nom).join(', ')||'—'};
   });
+}
+/* produits réellement saisis dans le registre (30 jours), regroupés sans tenir compte de la casse */
+function pmsNettProduits(lignes){
+  const m={};
+  (lignes||[]).forEach(x=>{
+    const nom=String(x.produit||'').trim();if(!nom)return;
+    const k=nom.toLowerCase();
+    if(!m[k])m[k]={nom:nom,n:0,der:x.fait_le};
+    m[k].n++;if(x.fait_le>m[k].der)m[k].der=x.fait_le;
+  });
+  return Object.keys(m).map(k=>m[k]).sort((a,b)=>b.n-a.n||a.nom.localeCompare(b.nom,'fr'));
+}
+function pmsNettListeProduits(d){
+  const lim=pmsNettJoursAvant(30);
+  return pmsNettProduits(d.journal.filter(x=>x.fait_le>=lim)).map(p=>({nom:p.nom,n:p.n,der:new Date(p.der+'T12:00:00').toLocaleDateString('fr-FR')}));
 }
 function pmsNettHtml(){
   const cr=pmsCrecheChoisie(),cle=pmsNettCle(cr);
@@ -232,8 +248,12 @@ function pmsNettHtml(){
   const lien=' <a href="stock.html" target="_blank">Ouvrir Stock › Nettoyages</a>';
   if(d.erreur)return '<p class="hint">Registre des nettoyages indisponible ('+esc(d.erreur)+').'+lien+'</p>';
   if(!d.plan.length)return '<p class="hint">Aucun plan de nettoyage défini pour cette crèche.'+lien+'</p>';
-  const lignes=pmsNettSynthese(d).map(l=>'<tr><td>'+esc(PMS_NETT_TYPE[l.type]||l.type)+'</td><td>'+esc(l.libelle)+'</td><td>'+esc(l.freq)+'</td><td>'+l.n+'</td><td>'+esc(l.der)+'</td><td>'+esc(l.par)+'</td></tr>').join('');
-  return '<table class="ft"><tr><th>Type</th><th>Jeux / espace</th><th>Fréquence</th><th>Fait (30 j)</th><th>Dernier nettoyage</th><th>Fait par</th></tr>'+lignes+'</table><p class="hint">Lecture en direct du registre ; le PDF reprend cette synthèse et le détail des 14 derniers jours.'+lien+'</p>';
+  const lignes=pmsNettSynthese(d).map(l=>'<tr><td>'+esc(PMS_NETT_TYPE[l.type]||l.type)+'</td><td>'+esc(l.libelle)+'</td><td>'+esc(l.freq)+'</td><td>'+l.n+'</td><td>'+esc(l.der)+'</td><td>'+esc(l.par)+'</td><td>'+esc(l.prod)+'</td></tr>').join('');
+  const prods=pmsNettListeProduits(d);
+  const listeProd='<p style="margin:10px 0 4px"><b>Produits utilisés (30 derniers jours)</b></p>'+(prods.length
+    ?'<table class="ft"><tr><th>Produit</th><th>Utilisations</th><th>Dernier usage</th></tr>'+prods.map(p=>'<tr><td>'+esc(p.nom)+'</td><td>'+p.n+'</td><td>'+esc(p.der)+'</td></tr>').join('')+'</table>'
+    :'<p class="hint">Aucun produit renseigné dans le registre sur la période.</p>');
+  return '<table class="ft"><tr><th>Type</th><th>Jeux / espace</th><th>Fréquence</th><th>Fait (30 j)</th><th>Dernier nettoyage</th><th>Fait par</th><th>Produits utilisés</th></tr>'+lignes+'</table>'+listeProd+'<p class="hint">Lecture en direct du registre ; les produits viennent de ce qui est saisi à chaque nettoyage. Le PDF reprend cette synthèse et le détail des 14 derniers jours.'+lien+'</p>';
 }
 async function pmsMajNett(){
   const cr=pmsCrecheChoisie();
@@ -664,8 +684,14 @@ TPL.pms_sanitaire={
       y+=2;
     }else{
       const syn=pmsNettSynthese(d);
-      y=pdfGrid(doc,M,y,[24,46,28,20,26,38],[{head:true,cells:['Type','Jeux / espace','Fréquence','Fait (30 j)','Dernier','Fait par']}]
-        .concat(syn.map(l=>({cells:[PMS_NETT_TYPE[l.type]||l.type,l.libelle,l.freq,String(l.n),l.der,l.par]}))),{fs:8,minH:7});
+      y=pdfGrid(doc,M,y,[20,36,22,14,20,28,42],[{head:true,cells:['Type','Jeux / espace','Fréquence','Fait (30 j)','Dernier','Fait par','Produits utilisés']}]
+        .concat(syn.map(l=>({cells:[PMS_NETT_TYPE[l.type]||l.type,l.libelle,l.freq,String(l.n),l.der,l.par,l.prod]}))),{fs:8,minH:7});
+      y+=3;
+      const prods=pmsNettListeProduits(d);
+      P('Produits utilisés (30 derniers jours)',9,true);
+      if(prods.length)y=pdfGrid(doc,M,y,[100,30,52],[{head:true,cells:['Produit','Utilisations','Dernier usage']}]
+        .concat(prods.map(p=>({cells:[p.nom,String(p.n),p.der]}))),{fs:8,minH:7});
+      else P('Aucun produit renseigné dans le registre sur la période.',9);
       y+=3;
       const lim=pmsNettJoursAvant(14),det=d.journal.filter(x=>x.fait_le>=lim);
       P('Détail des 14 derniers jours ('+det.length+' nettoyage'+(det.length>1?'s':'')+')',9,true);
