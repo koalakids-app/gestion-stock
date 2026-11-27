@@ -215,7 +215,10 @@ function pmsNettJoursAvant(n){return new Date(Date.now()-n*864e5).toISOString().
 /* une ligne de synthèse par ligne du plan : fréquence, nombre sur 30 jours, dernier passage */
 function pmsNettSynthese(d){
   const lim=pmsNettJoursAvant(30);
-  return d.plan.map(l=>{
+  /* classé par type (jeux, puis espaces) puis par fréquence, de la plus fréquente à la moins fréquente ; ordre du plan conservé à égalité */
+  const ordF=Object.keys(PMS_NETT_FREQ),rang=(a,t)=>{const i=t.indexOf(a);return i<0?t.length:i;};
+  const plan=d.plan.map((l,i)=>({l,i})).sort((a,b)=>rang(a.l.type,['jeux','espace'])-rang(b.l.type,['jeux','espace'])||rang(a.l.frequence,ordF)-rang(b.l.frequence,ordF)||a.i-b.i).map(x=>x.l);
+  return plan.map(l=>{
     const fait=d.journal.filter(x=>x.plan_id===l.id);
     const rec=fait.filter(x=>x.fait_le>=lim);
     const der=fait[0];
