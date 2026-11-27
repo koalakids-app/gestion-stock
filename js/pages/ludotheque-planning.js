@@ -11,6 +11,7 @@
 const PLP_MAX = 4;
 const PLP_JOURS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi'];
 const PLP_TABLE = 'planning_propositions';
+const PLP_SEMAINES = 'planning_propositions_semaines';
 const PLP_COULEURS = {
   'Sensoriel': '#7C3AED', 'Manipulation': '#D97706', 'Construction': '#2563EB',
   'Motricité': '#16A34A', 'Imitation': '#DB2777', 'Expression artistique': '#F47920',
@@ -21,6 +22,7 @@ const PLP = {
   debut: null,          // lundi de la semaine affichée (Date locale)
   creche: null,         // crèche dont on construit le planning
   rows: [],             // lignes planning_propositions de la semaine affichée
+  semaine: null,        // état de la semaine (planning_propositions_semaines) : null = brouillon jamais partagé
   filtreCat: 'all',
   filtreCreche: 'all',  // filtre de la bibliothèque (toutes les crèches par défaut)
   q: '',
@@ -106,6 +108,8 @@ function plpInitialiser() {
   document.getElementById('plp-copier').onclick = plpCopierPrecedente;
   document.getElementById('plp-vider').onclick = plpViderSemaine;
   document.getElementById('plp-imprimer').onclick = () => window.print();
+  document.getElementById('plp-partager').onclick = plpPartager;
+  document.getElementById('plp-brouillon').onclick = plpRepasserBrouillon;
   document.getElementById('plp-picker-rech').oninput = plpRendrePicker;
 
   document.getElementById('plp-biblio').addEventListener('click', e => {
@@ -172,14 +176,18 @@ async function plpCharger() {
   const d0 = plpCle(PLP.debut), d4 = plpCle(plpAjouterJours(PLP.debut, 4));
   if (IS_LOCAL) { plpRendre(); return; }
   try {
-    const rows = await sbGet(PLP_TABLE,
-      `creche=eq.${encodeURIComponent(PLP.creche)}&jour=gte.${d0}&jour=lte.${d4}&order=jour.asc,position.asc`);
+    const [rows, sem] = await Promise.all([
+      sbGet(PLP_TABLE, `creche=eq.${encodeURIComponent(PLP.creche)}&jour=gte.${d0}&jour=lte.${d4}&order=jour.asc,position.asc`),
+      sbGet(PLP_SEMAINES, `creche=eq.${encodeURIComponent(PLP.creche)}&lundi=eq.${d0}&order=lundi.asc`).catch(() => []),
+    ]);
     if (jeton !== PLP.jeton) return;
     PLP.rows = Array.isArray(rows) ? rows : [];
+    PLP.semaine = (Array.isArray(sem) && sem[0]) || null;
   } catch (e) {
     if (jeton !== PLP.jeton) return;
     console.error('[Planning] chargement', e);
     PLP.rows = [];
+    PLP.semaine = null;
     showNotif('⚠ Planning non chargé : ' + e.message);
   }
   plpRendre();
@@ -203,6 +211,7 @@ async function plpAjouter(j, propId) {
   try {
     if (IS_LOCAL) { ligne.id = 'local-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6); PLP.rows.push(ligne); }
     else { const res = await sbInsert(PLP_TABLE, ligne); PLP.rows.push(res[0] || ligne); }
+    plpTouche();
     plpRendre();
     return true;
   } catch (e) {
@@ -216,6 +225,7 @@ async function plpRetirer(id) {
   try {
     if (!IS_LOCAL) await sbDelete(PLP_TABLE, id);
     PLP.rows = PLP.rows.filter(r => r.id !== id);
+    plpTouche();
     plpRendre();
   } catch (e) { console.error('[Planning] retrait', e); await plpRecharger('⚠ Retrait impossible : ' + e.message); }
 }
@@ -227,6 +237,8 @@ async function plpEnregistrerNote(id, valeur) {
   try {
     if (!IS_LOCAL) await sbUpdate(PLP_TABLE, id, { note });
     l.note = note;
+    plpTouche();
+    plpRendreStatut();
   } catch (e) { console.error('[Planning] note', e); showNotif('⚠ Note non enregistrée : ' + e.message); }
 }
 
@@ -239,6 +251,7 @@ async function plpDeplacerJour(id, j) {
   try {
     if (!IS_LOCAL) await sbUpdate(PLP_TABLE, id, { jour, position });
     l.jour = jour; l.position = position;
+    plpTouche();
     plpRendre();
   } catch (e) { console.error('[Planning] déplacement', e); await plpRecharger('⚠ Déplacement impossible — planning rechargé'); }
 }
@@ -257,6 +270,7 @@ async function plpEchanger(id, delta) {
       if (!r.ok) throw new Error('RPC ' + r.status);
     }
     const p = l.position; l.position = v.position; v.position = p;
+    plpTouche();
     plpRendre();
   } catch (e) { console.error('[Planning] échange', e); await plpRecharger('⚠ Changement d\'ordre impossible — planning rechargé'); }
 }
@@ -274,7 +288,7 @@ async function plpViderSemaine() {
   if (!plpPeutEcrire()) return;
   if (!PLP.rows.length) { showNotif('Le planning de cette semaine est déjà vide'); return; }
   if (!confirm('Vider le planning de cette semaine pour ' + PLP.creche + ' ?')) return;
-  try { await plpSupprimerSemaine(); PLP.rows = []; plpRendre(); showNotif('Semaine vidée'); }
+  try { await plpSupprimerSemaine(); PLP.rows = []; plpTouche(); plpRendre(); showNotif('Semaine vidée'); }
   catch (e) { console.error('[Planning] vider', e); await plpRecharger('⚠ Impossible de vider : ' + e.message); }
 }
 
@@ -316,6 +330,7 @@ function plpRendre() {
   lecture.textContent = '👁 Lecture seule : vous consultez le planning de ' + PLP.creche +
     '. Seule cette crèche peut le modifier' + (SK_WRITE_CRECHE ? ' (vous pouvez modifier celui de ' + SK_WRITE_CRECHE + ').' : '.');
   ['plp-copier', 'plp-vider'].forEach(id => { document.getElementById(id).style.display = ecrit ? '' : 'none'; });
+  plpRendreStatut();
   plpRendreBiblio();
   plpRendreSemaine(ecrit);
   plpRendreRecap();
@@ -412,4 +427,104 @@ function plpRendrePicker() {
 }
 async function plpChoisir(id) {
   if (await plpAjouter(PLP.jourPicker, id)) closeModal('modal-plp-picker');
+}
+
+// ─── BROUILLON / PARTAGE ────────────────────────────────────────────────────
+// Brouillon : visible des seules personnes de la crèche. Partagé : lisible par
+// toutes les crèches de l'organisation. Une modification après le partage reste
+// visible mais marque la semaine « modifiée depuis le partage ».
+function plpEtat() {
+  const s = PLP.semaine;
+  if (!s || !s.partage_le) return 'brouillon';
+  const modifie = s._touche || (s.modifie_le && new Date(s.modifie_le) > new Date(s.partage_le));
+  return modifie ? 'modifie' : 'partage';
+}
+function plpTouche() { if (PLP.semaine) PLP.semaine._touche = true; }
+
+function plpRendreStatut() {
+  const ecrit = plpPeutEcrire(), etat = plpEtat();
+  const el = document.getElementById('plp-etat');
+  const quand = PLP.semaine && PLP.semaine.partage_le
+    ? new Date(PLP.semaine.partage_le).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' }) +
+      (PLP.semaine.partage_nom ? ' par ' + PLP.semaine.partage_nom : '') : '';
+  el.className = 'plp-etat ' + etat;
+  el.textContent = etat === 'brouillon' ? 'Brouillon — visible de votre crèche seulement'
+    : etat === 'partage' ? 'Partagé à l\'équipe le ' + quand
+    : 'Partagé le ' + quand + ' — modifié depuis';
+  el.style.display = (ecrit || etat !== 'brouillon') ? '' : 'none';
+  const bp = document.getElementById('plp-partager'), bb = document.getElementById('plp-brouillon');
+  bp.style.display = ecrit && etat !== 'partage' ? '' : 'none';
+  bp.textContent = etat === 'modifie' ? '📣 Partager à nouveau' : '📣 Partager à l\'équipe';
+  bb.style.display = ecrit && etat !== 'brouillon' ? '' : 'none';
+  const vide = document.getElementById('plp-vide-lecture');
+  if (vide) vide.style.display = (!ecrit && !PLP.rows.length) ? 'block' : 'none';
+}
+
+async function plpPartager() {
+  if (!plpPeutEcrire()) return;
+  if (!PLP.rows.length) { showNotif('⚠ Le planning est vide : rien à partager'); return; }
+  const lundi = plpCle(PLP.debut);
+  const nom = (SK_PROFILE && SK_PROFILE.name) || '';
+  try {
+    if (IS_LOCAL) {
+      PLP.semaine = { creche: PLP.creche, lundi, partage_le: new Date().toISOString(), partage_nom: nom, modifie_le: new Date().toISOString() };
+    } else {
+      const r = await sbFetchAuth(`${SUPA_URL}/rest/v1/rpc/kk_planning_prop_partager`, {
+        method: 'POST', headers: { ...SUPA_HEADERS, 'Prefer': 'return=representation' },
+        body: JSON.stringify({ p_creche: PLP.creche, p_lundi: lundi, p_nom: nom }),
+      });
+      if (!r.ok) throw new Error('RPC ' + r.status + ' ' + await r.text().catch(() => ''));
+      PLP.semaine = await r.json();
+    }
+    plpRendreStatut();
+    const n = await plpPrevenir();
+    showNotif('✅ Planning partagé à l\'équipe' + (n > 0 ? ' — ' + n + ' personne' + (n > 1 ? 's' : '') + ' prévenue' + (n > 1 ? 's' : '') : ''));
+  } catch (e) { console.error('[Planning] partage', e); showNotif('⚠ Partage impossible : ' + e.message); }
+}
+
+async function plpRepasserBrouillon() {
+  if (!plpPeutEcrire() || !PLP.semaine) return;
+  if (!confirm('Repasser ce planning en brouillon ? Les autres crèches ne le verront plus.')) return;
+  try {
+    if (!IS_LOCAL) {
+      const r = await sbFetchAuth(
+        `${SUPA_URL}/rest/v1/${PLP_SEMAINES}?creche=eq.${encodeURIComponent(PLP.creche)}&lundi=eq.${plpCle(PLP.debut)}`,
+        { method: 'PATCH', headers: SUPA_HEADERS, body: JSON.stringify({ partage_le: null, partage_par: null, partage_nom: null }) });
+      if (!r.ok) throw new Error('PATCH ' + r.status);
+    }
+    PLP.semaine = Object.assign({}, PLP.semaine, { partage_le: null, partage_par: null, partage_nom: null, _touche: false });
+    plpRendreStatut();
+    showNotif('Planning repassé en brouillon');
+  } catch (e) { console.error('[Planning] brouillon', e); showNotif('⚠ Impossible : ' + e.message); }
+}
+
+/** Notification push à l'équipe de la crèche (référent·es et employé·es avec un compte).
+ *  Jamais bloquante ; renvoie le nombre de destinataires visés. notify-push applique
+ *  lui-même le silence réseau et le contrôle d'organisation. */
+async function plpPrevenir() {
+  if (IS_LOCAL) return 0;
+  try {
+    const crecheId = Object.keys(SK_CRECHE_NAMES || {}).find(k => SK_CRECHE_NAMES[k] === PLP.creche);
+    if (!crecheId) return 0;
+    const [refs, emps] = await Promise.all([
+      sbGet('referents', `creche_id=eq.${crecheId}&select=id&order=id.asc`).catch(() => []),
+      sbGet('employes', `creche_id=eq.${crecheId}&user_id=not.is.null&select=id&order=id.asc`).catch(() => []),
+    ]);
+    const referent_ids = refs.map(x => x.id).filter(id => !SK_PROFILE || id !== SK_PROFILE.id);
+    const employe_ids = emps.map(x => x.id);
+    if (!referent_ids.length && !employe_ids.length) return 0;
+    const fin = plpAjouterJours(PLP.debut, 4);
+    const r = await sbFetchAuth(`${SUPA_URL}/functions/v1/notify-push`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        referent_ids, employe_ids,
+        title: 'Planning des propositions ludiques',
+        body: PLP.creche + ' — semaine du ' + PLP.debut.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' }) +
+          ' au ' + fin.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' }),
+        url: './ludotheque.html',
+        tag: 'planning-ludique-' + PLP.creche + '-' + plpCle(PLP.debut),
+      }),
+    });
+    return r.ok ? referent_ids.length + employe_ids.length : 0;
+  } catch (e) { console.warn('[Planning] notification', e); return 0; }
 }
